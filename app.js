@@ -22,14 +22,14 @@ const layoutHints = {
 
 let lastModel = null;
 let polygonPoints = [
-  {x:100,y:100},
-  {x:900,y:100},
-  {x:900,y:600},
-  {x:100,y:600}
+  {x:100,y:100},{x:900,y:100},{x:900,y:600},{x:100,y:600}
 ];
+let polygonClosed = true;
+let drawingPolygon = false;
 let draggingVertex = -1;
 
 function polygonArea(points){
+  if(points.length<3) return 0;
   let sum=0;
   for(let i=0;i<points.length;i++){
     const a=points[i], b=points[(i+1)%points.length];
@@ -39,6 +39,7 @@ function polygonArea(points){
 }
 
 function polygonBounds(points){
+  if(!points.length) return {minX:0,maxX:1000,minY:0,maxY:700};
   const xs=points.map(p=>p.x), ys=points.map(p=>p.y);
   return {
     minX:Math.min(...xs), maxX:Math.max(...xs),
@@ -46,7 +47,7 @@ function polygonBounds(points){
   };
 }
 
-function svgToMm(point, bounds, L, W){
+function svgToMm(point,bounds,L,W){
   const bw=Math.max(1,bounds.maxX-bounds.minX);
   const bh=Math.max(1,bounds.maxY-bounds.minY);
   return {
@@ -58,129 +59,163 @@ function svgToMm(point, bounds, L, W){
 function getPolygonMetrics(){
   const L=+$("L").value||6200;
   const W=+$("W").value||3800;
-  const shapeMode=$("shapeMode").value;
   const b=polygonBounds(polygonPoints);
-  const pxArea=polygonArea(polygonPoints);
+  const pxArea=polygonClosed?polygonArea(polygonPoints):0;
   const bw=Math.max(1,b.maxX-b.minX);
   const bh=Math.max(1,b.maxY-b.minY);
   return {
     areaM2:(pxArea/(bw*bh))*(L*W)/1e6,
-    bboxL:L,
-    bboxW:W,
-    bounds:b
+    bboxL:L,bboxW:W,bounds:b
   };
 }
 
-function renderPolygonEditor(){
-  const svg=$("polygonEditor");
-  if(!svg || $("shapeMode").value!=="free") return;
-  svg.innerHTML="";
+function eventToSvg(svg,e){
+  const pt=svg.createSVGPoint();
+  pt.x=e.clientX; pt.y=e.clientY;
+  const ctm=svg.getScreenCTM();
+  return ctm ? pt.matrixTransform(ctm.inverse()) : {x:0,y:0};
+}
 
-  const ns="http://www.w3.org/2000/svg";
-  const poly=document.createElementNS(ns,"polygon");
-  poly.setAttribute("points",polygonPoints.map(p=>p.x+","+p.y).join(" "));
-  poly.setAttribute("class","polygonFill");
-  svg.appendChild(poly);
+function startDrawingPolygon(){
+  polygonPoints=[];
+  polygonClosed=false;
+  drawingPolygon=true;
+  draggingVertex=-1;
+  renderPolygonEditor();
+  calculate();
+}
 
-  const metrics=getPolygonMetrics();
-  const b=metrics.bounds;
-
-  polygonPoints.forEach((p,i)=>{
-    const next=polygonPoints[(i+1)%polygonPoints.length];
-
-    const mx=(p.x+next.x)/2, my=(p.y+next.y)/2;
-    const add=document.createElementNS(ns,"circle");
-    add.setAttribute("cx",mx); add.setAttribute("cy",my); add.setAttribute("r","13");
-    add.setAttribute("class","addHandle");
-    add.dataset.edge=i;
-    add.addEventListener("click",e=>{
-      e.stopPropagation();
-      polygonPoints.splice(i+1,0,{x:mx,y:my});
-      renderPolygonEditor();
-      calculate();
-    });
-    svg.appendChild(add);
-
-    const m1=svgToMm(p,b,metrics.bboxL,metrics.bboxW);
-    const m2=svgToMm(next,b,metrics.bboxL,metrics.bboxW);
-    const length=Math.hypot(m2.x-m1.x,m2.y-m1.y);
-    const label=document.createElementNS(ns,"text");
-    label.setAttribute("x",mx); label.setAttribute("y",my-20);
-    label.setAttribute("text-anchor","middle");
-    label.setAttribute("class","edgeLabel");
-    label.textContent=fmt(length)+" мм";
-    label.addEventListener("click",e=>{
-      e.stopPropagation();
-      const raw=window.prompt("Длина ребра, мм", String(Math.round(length)));
-      if(raw===null) return;
-      const desired=Number(String(raw).replace(",","."));
-      if(!Number.isFinite(desired) || desired<=0) return;
-
-      const current=Math.max(1,length);
-      const scale=desired/current;
-
-      const dx=next.x-p.x;
-      const dy=next.y-p.y;
-      polygonPoints[(i+1)%polygonPoints.length]={
-        x:Math.max(20,Math.min(980,p.x+dx*scale)),
-        y:Math.max(20,Math.min(680,p.y+dy*scale))
-      };
-
-      renderPolygonEditor();
-      calculate();
-    });
-    svg.appendChild(label);
-
-    const c=document.createElementNS(ns,"circle");
-    c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r","16");
-    c.setAttribute("class","vertexHandle");
-    c.dataset.vertex=i;
-    c.addEventListener("pointerdown",e=>{
-      e.preventDefault();
-      draggingVertex=i;
-      svg.setPointerCapture(e.pointerId);
-    });
-
-    svg.appendChild(c);
-  });
+function closePolygon(){
+  if(polygonPoints.length<3) return;
+  polygonClosed=true;
+  drawingPolygon=false;
+  renderPolygonEditor();
+  calculate();
 }
 
 function resetPolygon(){
   polygonPoints=[
     {x:100,y:100},{x:900,y:100},{x:900,y:600},{x:100,y:600}
   ];
+  polygonClosed=true;
+  drawingPolygon=false;
   renderPolygonEditor();
   calculate();
 }
 
+function renderPolygonEditor(){
+  const svg=$("polygonEditor");
+  if(!svg || $("shapeMode").value!=="free") return;
+  svg.innerHTML="";
+  svg.classList.toggle("drawing",drawingPolygon);
+
+  const ns="http://www.w3.org/2000/svg";
+
+  if(polygonPoints.length>=2){
+    const shape=document.createElementNS(ns,polygonClosed?"polygon":"polyline");
+    shape.setAttribute("points",polygonPoints.map(p=>p.x+","+p.y).join(" "));
+    shape.setAttribute("class",polygonClosed?"polygonFill":"openPolyline");
+    svg.appendChild(shape);
+  }
+
+  const metrics=getPolygonMetrics();
+  const b=metrics.bounds;
+  const edgeCount=polygonClosed?polygonPoints.length:Math.max(0,polygonPoints.length-1);
+
+  for(let i=0;i<edgeCount;i++){
+    const p=polygonPoints[i];
+    const next=polygonPoints[(i+1)%polygonPoints.length];
+    const mx=(p.x+next.x)/2, my=(p.y+next.y)/2;
+
+    if(polygonClosed){
+      const add=document.createElementNS(ns,"circle");
+      add.setAttribute("cx",mx); add.setAttribute("cy",my); add.setAttribute("r","13");
+      add.setAttribute("class","addHandle");
+      add.addEventListener("click",e=>{
+        e.stopPropagation();
+        polygonPoints.splice(i+1,0,{x:mx,y:my});
+        renderPolygonEditor();
+        calculate();
+      });
+      svg.appendChild(add);
+    }
+
+    if(polygonClosed){
+      const m1=svgToMm(p,b,metrics.bboxL,metrics.bboxW);
+      const m2=svgToMm(next,b,metrics.bboxL,metrics.bboxW);
+      const length=Math.hypot(m2.x-m1.x,m2.y-m1.y);
+      const label=document.createElementNS(ns,"text");
+      label.setAttribute("x",mx); label.setAttribute("y",my-20);
+      label.setAttribute("text-anchor","middle");
+      label.setAttribute("class","edgeLabel");
+      label.textContent=fmt(length)+" мм";
+      label.addEventListener("click",e=>{
+        e.stopPropagation();
+        const raw=window.prompt("Длина ребра, мм",String(Math.round(length)));
+        if(raw===null) return;
+        const desired=Number(String(raw).replace(",","."));
+        if(!Number.isFinite(desired)||desired<=0) return;
+        const scale=desired/Math.max(1,length);
+        const dx=next.x-p.x,dy=next.y-p.y;
+        polygonPoints[(i+1)%polygonPoints.length]={
+          x:Math.max(20,Math.min(980,p.x+dx*scale)),
+          y:Math.max(20,Math.min(680,p.y+dy*scale))
+        };
+        renderPolygonEditor();
+        calculate();
+      });
+      svg.appendChild(label);
+    }
+  }
+
+  polygonPoints.forEach((p,i)=>{
+    const c=document.createElementNS(ns,"circle");
+    c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r",i===0&&drawingPolygon&&polygonPoints.length>=3?"20":"16");
+    c.setAttribute("class","vertexHandle"+(i===0&&drawingPolygon&&polygonPoints.length>=3?" closeTarget":""));
+
+    if(i===0&&drawingPolygon&&polygonPoints.length>=3){
+      c.addEventListener("click",e=>{e.stopPropagation();closePolygon();});
+    } else if(polygonClosed){
+      c.addEventListener("pointerdown",e=>{
+        e.preventDefault(); e.stopPropagation();
+        draggingVertex=i;
+        svg.setPointerCapture(e.pointerId);
+      });
+    }
+    svg.appendChild(c);
+  });
+}
+
 function installPolygonPointerHandlers(){
   const svg=$("polygonEditor");
-  if(!svg || svg.dataset.handlersInstalled) return;
+  if(!svg||svg.dataset.handlersInstalled) return;
   svg.dataset.handlersInstalled="1";
+
+  svg.addEventListener("click",e=>{
+    if(!drawingPolygon || e.target.classList.contains("vertexHandle")) return;
+    const loc=eventToSvg(svg,e);
+    polygonPoints.push({
+      x:Math.max(20,Math.min(980,loc.x)),
+      y:Math.max(20,Math.min(680,loc.y))
+    });
+    renderPolygonEditor();
+  });
 
   svg.addEventListener("pointermove",e=>{
     if(draggingVertex<0) return;
-    const pt=svg.createSVGPoint();
-    pt.x=e.clientX;
-    pt.y=e.clientY;
-    const ctm=svg.getScreenCTM();
-    if(!ctm) return;
-    const loc=pt.matrixTransform(ctm.inverse());
-
+    const loc=eventToSvg(svg,e);
     polygonPoints[draggingVertex]={
       x:Math.max(20,Math.min(980,loc.x)),
       y:Math.max(20,Math.min(680,loc.y))
     };
-
     renderPolygonEditor();
     calculate();
   });
 
   const stop=e=>{
     draggingVertex=-1;
-    try{ if(svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId); }catch(_){}
+    try{if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);}catch(_){}
   };
-
   svg.addEventListener("pointerup",stop);
   svg.addEventListener("pointercancel",stop);
 }
@@ -499,6 +534,86 @@ function buildBoardRows(runLength,rowCount,mode,allowedLengths){
   return buildRowsOptimal(runLength,rowCount,allowedLengths);
 }
 
+function polygonScanlineSegments(axisValue,direction,L,W){
+  if(!polygonClosed||polygonPoints.length<3) return [];
+  const b=polygonBounds(polygonPoints);
+  const bw=Math.max(1,b.maxX-b.minX), bh=Math.max(1,b.maxY-b.minY);
+  const scan = direction==="l"
+    ? b.minY + (axisValue/W)*bh
+    : b.minX + (axisValue/L)*bw;
+
+  const hits=[];
+  for(let i=0;i<polygonPoints.length;i++){
+    const a=polygonPoints[i], c=polygonPoints[(i+1)%polygonPoints.length];
+    if(direction==="l"){
+      if((a.y<=scan&&c.y>scan)||(c.y<=scan&&a.y>scan)){
+        const t=(scan-a.y)/(c.y-a.y);
+        hits.push(a.x+t*(c.x-a.x));
+      }
+    }else{
+      if((a.x<=scan&&c.x>scan)||(c.x<=scan&&a.x>scan)){
+        const t=(scan-a.x)/(c.x-a.x);
+        hits.push(a.y+t*(c.y-a.y));
+      }
+    }
+  }
+  hits.sort((a,b)=>a-b);
+
+  const segments=[];
+  for(let i=0;i+1<hits.length;i+=2){
+    const startPx=hits[i],endPx=hits[i+1];
+    if(endPx-startPx<0.5) continue;
+    if(direction==="l"){
+      segments.push({
+        start:(startPx-b.minX)/bw*L,
+        length:(endPx-startPx)/bw*L
+      });
+    }else{
+      segments.push({
+        start:(startPx-b.minY)/bh*W,
+        length:(endPx-startPx)/bh*W
+      });
+    }
+  }
+  return segments;
+}
+
+function mergePurchases(target,source){
+  [3000,4000,6000].forEach(k=>target[k]=(target[k]||0)+(source[k]||0));
+}
+
+function buildPolygonBoardRows(L,W,direction,boardModule,mode,allowedLengths){
+  const across=direction==="l"?W:L;
+  const rowCount=Math.ceil(across/boardModule);
+  const rows=[];
+  const purchases={3000:0,4000:0,6000:0};
+  let reusedPieces=0,finalWaste=0;
+  const offcuts=[];
+  let warning="";
+
+  for(let r=0;r<rowCount;r++){
+    const axis=Math.min(across-0.001,(r+0.5)*boardModule);
+    const spans=polygonScanlineSegments(axis,direction,L,W);
+    const row={axis,segments:[],seams:[]};
+
+    for(const span of spans){
+      const built=buildBoardRows(span.length,1,mode,allowedLengths);
+      if(built.warning&&!warning) warning=built.warning;
+      if(!built.rows.length) continue;
+      const local=built.rows[0];
+      row.segments.push({start:span.start,length:span.length,pieces:local.pieces,seams:local.seams});
+      local.seams.forEach(s=>row.seams.push(span.start+s));
+      mergePurchases(purchases,built.purchases);
+      reusedPieces+=built.reusedPieces||0;
+      finalWaste+=built.finalWaste||0;
+      if(built.offcuts) offcuts.push(...built.offcuts);
+    }
+    rows.push(row);
+  }
+
+  return {rows,purchases,reusedPieces,finalWaste,offcuts,warning,polygon:true};
+}
+
 function uniquePositions(values,tolerance=2){
   const sorted=[...values].sort((a,b)=>a-b);
   const out=[];
@@ -576,39 +691,56 @@ function addLine(parent,cls,direction,pos,axisLength,isRunAxis){
   parent.appendChild(line);
 }
 
-function renderBoardRows(terrace,model){
-  const {direction,run,boardRows}=model;
-  const w=terrace.clientWidth;
-  const h=terrace.clientHeight;
+function renderBoardRows(parent,model){
+  const {direction,run,across,boardRows}=model;
+  const w=parent.clientWidth,h=parent.clientHeight;
+
+  if(boardRows.polygon){
+    boardRows.rows.forEach(row=>{
+      const rowStart=Math.max(0,(row.axis-CONFIG.defaultBoardModule/2)/across);
+      const rowHeight=Math.min(1,CONFIG.defaultBoardModule/across);
+
+      row.segments.forEach(seg=>{
+        let cursor=seg.start;
+        seg.pieces.forEach(piece=>{
+          const el=document.createElement("div");
+          el.className="boardPiece"+(piece.reused?" alt":"");
+          const a=cursor/run,b=(cursor+piece.length)/run;
+
+          if(direction==="l"){
+            Object.assign(el.style,{
+              left:(a*w)+"px",width:Math.max(1,(b-a)*w)+"px",
+              top:(rowStart*h)+"px",height:Math.max(2,rowHeight*h)+"px"
+            });
+          }else{
+            Object.assign(el.style,{
+              top:(a*h)+"px",height:Math.max(1,(b-a)*h)+"px",
+              left:(rowStart*w)+"px",width:Math.max(2,rowHeight*w)+"px"
+            });
+          }
+          parent.appendChild(el);
+          cursor+=piece.length;
+        });
+      });
+    });
+    return;
+  }
+
   const rowCount=boardRows.rows.length;
-
   boardRows.rows.forEach((row,rowIndex)=>{
-    const rowStart=rowIndex/rowCount;
-    const rowEnd=(rowIndex+1)/rowCount;
+    const rowStart=rowIndex/rowCount,rowEnd=(rowIndex+1)/rowCount;
     let cursor=0;
-
-    row.pieces.forEach((piece,pieceIndex)=>{
+    row.pieces.forEach(piece=>{
       const el=document.createElement("div");
       el.className="boardPiece"+(piece.reused?" alt":"");
-
-      const a=cursor/run;
-      const b=(cursor+piece.length)/run;
-
+      const a=cursor/run,b=(cursor+piece.length)/run;
       if(direction==="l"){
-        Object.assign(el.style,{
-          left:(a*w)+"px",width:Math.max(1,(b-a)*w)+"px",
-          top:(rowStart*h)+"px",height:Math.max(1,(rowEnd-rowStart)*h)+"px"
-        });
+        Object.assign(el.style,{left:(a*w)+"px",width:Math.max(1,(b-a)*w)+"px",top:(rowStart*h)+"px",height:Math.max(1,(rowEnd-rowStart)*h)+"px"});
       }else{
-        Object.assign(el.style,{
-          top:(a*h)+"px",height:Math.max(1,(b-a)*h)+"px",
-          left:(rowStart*w)+"px",width:Math.max(1,(rowEnd-rowStart)*w)+"px"
-        });
+        Object.assign(el.style,{top:(a*h)+"px",height:Math.max(1,(b-a)*h)+"px",left:(rowStart*w)+"px",width:Math.max(1,(rowEnd-rowStart)*w)+"px"});
       }
-
-      terrace.appendChild(el);
+      parent.appendChild(el);
       cursor+=piece.length;
-
     });
   });
 }
@@ -657,26 +789,31 @@ function renderPlan(model){
 function renderRowPlans(boardRows){
   const box=$("rowPlans");
   box.innerHTML="";
-
-  const maxShown=Math.min(boardRows.rows.length,12);
+  const nonEmpty=boardRows.rows.filter(r=>boardRows.polygon ? r.segments.length : true);
+  const maxShown=Math.min(nonEmpty.length,12);
 
   for(let i=0;i<maxShown;i++){
-    const row=boardRows.rows[i];
+    const row=nonEmpty[i];
     const div=document.createElement("div");
     div.className="rowPlan";
+    let pieces;
 
-    const pieces=row.pieces.map(p=>
-      (p.reused?"остаток ":"")+fmt(p.length)+" мм"
-    ).join(" + ");
+    if(boardRows.polygon){
+      pieces=row.segments.map(seg=>
+        seg.pieces.map(p=>fmt(p.length)+" мм").join(" + ")
+      ).join("  |  ");
+    }else{
+      pieces=row.pieces.map(p=>(p.reused?"остаток ":"")+fmt(p.length)+" мм").join(" + ");
+    }
 
     div.innerHTML="<span>Ряд "+(i+1)+"</span><b>"+pieces+"</b>";
     box.appendChild(div);
   }
 
-  if(boardRows.rows.length>maxShown){
+  if(nonEmpty.length>maxShown){
     const div=document.createElement("div");
     div.className="rowPlan";
-    div.innerHTML="<span>…</span><b>ещё "+(boardRows.rows.length-maxShown)+" рядов</b>";
+    div.innerHTML="<span>…</span><b>ещё "+(nonEmpty.length-maxShown)+" рядов</b>";
     box.appendChild(div);
   }
 }
@@ -706,7 +843,9 @@ function calculate(){
 
   const joistStep=joistStepByBoardHeight(boardHeight);
   const rowCount=Math.ceil(across/boardModule);
-  const boardRows=buildBoardRows(run,rowCount,layoutMode,allowedLengths);
+  const boardRows = shapeMode==="free" && polygonClosed
+    ? buildPolygonBoardRows(L,W,direction,boardModule,layoutMode,allowedLengths)
+    : buildBoardRows(run,rowCount,layoutMode,allowedLengths);
 
   const allSeams=uniquePositions((boardRows.rows||[]).flatMap(r=>r.seams));
   const joists=buildJoists(run,allSeams,joistStep);
@@ -746,9 +885,11 @@ function calculate(){
     : "не выбраны";
 
   const warning=$("layoutWarning");
-  const freeWarning = shapeMode==="free"
-    ? "Произвольный контур уже влияет на площадь и габариты. Раскладка доски, лаг, поясов и свай пока считается по габаритному прямоугольнику — точное отсечение по многоугольнику добавим следующим этапом."
-    : "";
+  const freeWarning = shapeMode==="free" && !polygonClosed
+    ? "Замкните контур кликом по первой точке — после этого начнётся расчёт раскладки внутри формы."
+    : shapeMode==="free"
+      ? "Доска уже раскладывается только внутри замкнутого контура. Профиль 40×40, пояс 80×80 и сваи пока считаются по габариту; их точное отсечение по контуру будет следующим этапом."
+      : "";
   warning.textContent=[boardRows.warning,freeWarning].filter(Boolean).join(" ");
   warning.classList.toggle("hidden",!warning.textContent);
 
@@ -843,6 +984,7 @@ function updateControls(){
   $(id).addEventListener("change",()=>{if(lastModel)renderPlan(lastModel);});
 });
 
+$("drawPolygon")?.addEventListener("click",startDrawingPolygon);
 $("resetPolygon")?.addEventListener("click",resetPolygon);
 $("calc").addEventListener("click",calculate);
 
