@@ -778,6 +778,85 @@ function buildJoists(run,allSeams,maxStep){
   };
 }
 
+function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide){
+  const run=direction==="l"?L:W;
+  const belts=[];
+  let beltMeters=0;
+  let totalPiles=0;
+  let maxPilesPerBelt=0;
+  const pileSteps=[];
+
+  const pileAffected=hasHouse && houseAffectsAxis(direction,houseSide,"run");
+  const houseAtStart=houseAtAxisStart(direction,houseSide,"run");
+
+  for(const beltPos of beltPositions){
+    const spans=polygonScanlineSegments(beltPos,direction,L,W);
+    const segments=[];
+
+    for(const span of spans){
+      const layout=pileAffected
+        ? equalLayoutWithHouseOffset(
+            span.length,
+            CONFIG.ground.pileSpacingMax,
+            CONFIG.ground.houseOffset,
+            houseAtStart
+          )
+        : equalLayout(span.length,CONFIG.ground.pileSpacingMax);
+
+      const piles=layout.positions.map(p=>span.start+p);
+
+      segments.push({
+        start:span.start,
+        length:span.length,
+        piles,
+        pileStep:layout.step,
+        houseOffsetApplied:layout.houseOffsetApplied
+      });
+
+      beltMeters+=span.length/1000;
+      totalPiles+=piles.length;
+      maxPilesPerBelt=Math.max(maxPilesPerBelt,piles.length);
+      if(layout.step) pileSteps.push(layout.step);
+    }
+
+    belts.push({axis:beltPos,segments});
+  }
+
+  return {
+    belts,
+    beltMeters,
+    totalPiles,
+    maxPilesPerBelt,
+    minPileStep:pileSteps.length?Math.min(...pileSteps):0,
+    maxPileStep:pileSteps.length?Math.max(...pileSteps):0
+  };
+}
+
+function addBeltSegment(parent,direction,axis,across,start,length,run){
+  const w=parent.clientWidth;
+  const h=parent.clientHeight;
+  const line=document.createElement("div");
+  line.className="beltLine";
+
+  if(direction==="l"){
+    Object.assign(line.style,{
+      left:(start/run*w)+"px",
+      width:Math.max(1,length/run*w)+"px",
+      top:(axis/across*h)+"px",
+      height:"4px"
+    });
+  }else{
+    Object.assign(line.style,{
+      top:(start/run*h)+"px",
+      height:Math.max(1,length/run*h)+"px",
+      left:(axis/across*w)+"px",
+      width:"4px"
+    });
+  }
+
+  parent.appendChild(line);
+}
+
 function houseAffectsAxis(direction,houseSide,axis){
   if(axis==="across"){
     return direction==="l"?["top","bottom"].includes(houseSide):["left","right"].includes(houseSide);
@@ -871,7 +950,7 @@ function renderPlan(model){
   layer.innerHTML="";
   applyPolygonToTerrace();
 
-  const {run,across,direction,joists,beltLayout,pileLayout,base}=model;
+  const {run,across,direction,joists,beltLayout,pileLayout,base,polygonStructure}=model;
 
   if(model.shapeMode==="free" && (!polygonClosed || polygonPoints.length<3)){
     layer.innerHTML="";
@@ -879,7 +958,15 @@ function renderPlan(model){
   }
 
   if($("showBelts").checked){
-    for(const pos of beltLayout.positions) addLine(layer,"beltLine",direction,pos,across,false);
+    if(model.shapeMode==="free" && polygonStructure){
+      for(const belt of polygonStructure.belts){
+        for(const seg of belt.segments){
+          addBeltSegment(layer,direction,belt.axis,across,seg.start,seg.length,run);
+        }
+      }
+    }else{
+      for(const pos of beltLayout.positions) addLine(layer,"beltLine",direction,pos,across,false);
+    }
   }
 
   if($("showJoists").checked){
@@ -893,20 +980,41 @@ function renderPlan(model){
     const w=layer.clientWidth;
     const h=layer.clientHeight;
 
-    for(const beltPos of beltLayout.positions){
-      for(const pilePos of pileLayout.positions){
-        const dot=document.createElement("div");
-        dot.className="pileDot";
+    if(model.shapeMode==="free" && polygonStructure){
+      for(const belt of polygonStructure.belts){
+        for(const seg of belt.segments){
+          for(const pilePos of seg.piles){
+            const dot=document.createElement("div");
+            dot.className="pileDot";
 
-        if(direction==="l"){
-          dot.style.left=(pilePos/run*w)+"px";
-          dot.style.top=(beltPos/across*h)+"px";
-        }else{
-          dot.style.left=(beltPos/across*w)+"px";
-          dot.style.top=(pilePos/run*h)+"px";
+            if(direction==="l"){
+              dot.style.left=(pilePos/run*w)+"px";
+              dot.style.top=(belt.axis/across*h)+"px";
+            }else{
+              dot.style.left=(belt.axis/across*w)+"px";
+              dot.style.top=(pilePos/run*h)+"px";
+            }
+
+            layer.appendChild(dot);
+          }
         }
+      }
+    }else{
+      for(const beltPos of beltLayout.positions){
+        for(const pilePos of pileLayout.positions){
+          const dot=document.createElement("div");
+          dot.className="pileDot";
 
-        layer.appendChild(dot);
+          if(direction==="l"){
+            dot.style.left=(pilePos/run*w)+"px";
+            dot.style.top=(beltPos/across*h)+"px";
+          }else{
+            dot.style.left=(beltPos/across*w)+"px";
+            dot.style.top=(pilePos/run*h)+"px";
+          }
+
+          layer.appendChild(dot);
+        }
       }
     }
   }
@@ -1000,16 +1108,30 @@ function calculate(){
     ? equalLayoutWithHouseOffset(across,CONFIG.belt.maxSpacing,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"across"))
     : equalLayout(across,CONFIG.belt.maxSpacing);
 
-  const beltLengthM=run/1000;
-  const beltMeters=beltLayout.count*beltLengthM;
+  let polygonStructure=null;
+  let beltMeters=0;
+  let pileLayout=null;
+  let totalPiles=0;
+
+  if(shapeMode==="free" && polygonClosed){
+    polygonStructure=buildPolygonBeltsAndPiles(
+      L,W,direction,beltLayout.positions,hasHouse,houseSide
+    );
+    beltMeters=polygonStructure.beltMeters;
+    totalPiles=polygonStructure.totalPiles;
+  }else{
+    const beltLengthM=run/1000;
+    beltMeters=beltLayout.count*beltLengthM;
+
+    const pileAffected=hasHouse && houseAffectsAxis(direction,houseSide,"run");
+    pileLayout=pileAffected
+      ? equalLayoutWithHouseOffset(run,CONFIG.ground.pileSpacingMax,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"run"))
+      : equalLayout(run,CONFIG.ground.pileSpacingMax);
+
+    totalPiles=beltLayout.count*pileLayout.count;
+  }
+
   const beltBuy=stockPurchase(beltMeters);
-
-  const pileAffected=hasHouse && houseAffectsAxis(direction,houseSide,"run");
-  const pileLayout=pileAffected
-    ? equalLayoutWithHouseOffset(run,CONFIG.ground.pileSpacingMax,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"run"))
-    : equalLayout(run,CONFIG.ground.pileSpacingMax);
-
-  const totalPiles=beltLayout.count*pileLayout.count;
 
   const shapeMetrics = shapeMode==="free" ? getPolygonMetrics() : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
   $("area").textContent=fmt(shapeMetrics.areaM2,2)+" м²";
@@ -1025,8 +1147,8 @@ function calculate(){
     ? "Замкните контур кликом по первой точке — после этого начнётся расчёт раскладки внутри формы."
     : shapeMode==="free"
       ? (layoutMode==="half"
-          ? "Шахматка привязана к самому длинному непрерывному ряду: чётные ряды имеют один шов по центру, нечётные — швы на 1/4 и 3/4. Эти три оси профиля 40×40×2 проходят через всю площадку и больше нигде не размножаются."
-          : "Для произвольной формы оси стыков берутся по самому длинному непрерывному ряду и протягиваются через всю площадку. Локальные стыки не создают новые оси профиля 40×40×2.")
+          ? "Шахматка привязана к самому длинному непрерывному ряду: чётные ряды имеют один шов по центру, нечётные — швы на 1/4 и 3/4. Эти три оси профиля 40×40×2 проходят через всю площадку. Пояс 80×80 и сваи уже обрезаются по реальному контуру."
+          : "Для произвольной формы оси стыков берутся по самому длинному непрерывному ряду и протягиваются через всю площадку. Пояс 80×80 и сваи уже обрезаются по реальному контуру.")
       : "";
   warning.textContent=[boardRows.warning,freeWarning].filter(Boolean).join(" ");
   warning.classList.toggle("hidden",!warning.textContent);
@@ -1055,16 +1177,27 @@ function calculate(){
   $("beltPurchase").textContent=beltBuy.sticks+" хлыстов / "+fmt(beltBuy.meters)+" м";
 
   if(base==="ground"){
-    $("pilesPerBelt").textContent=pileLayout.count+" шт.";
-    $("pileStepOut").textContent=pileLayout.houseOffsetApplied
-      ? "400 мм от дома, далее ≈ "+fmt(pileLayout.step)+" мм"
-      : fmt(pileLayout.step)+" мм";
-    $("supports").textContent=totalPiles+" свай × 2500 мм";
-    $("pileInfo").textContent=
-      "Рядов пояса: "+beltLayout.count+
-      ". На каждом поясе: "+pileLayout.count+
-      " свай. Максимальный шаг — 1500 мм."+
-      (hasHouse?" Со стороны дома применяется отступ 400 мм.":"");
+    if(shapeMode==="free" && polygonStructure){
+      $("pilesPerBelt").textContent="по фактическим участкам";
+      $("pileStepOut").textContent=polygonStructure.maxPileStep
+        ? "до "+fmt(polygonStructure.maxPileStep)+" мм"
+        : "—";
+      $("supports").textContent=totalPiles+" свай × 2500 мм";
+      $("pileInfo").textContent=
+        "Пояс 80×80×2 обрезан по реальному контуру. Сваи расставлены отдельно на каждом фактическом участке пояса с равномерным шагом не более 1500 мм."+
+        (hasHouse?" Со стороны дома применяется отступ 400 мм.":"");
+    }else{
+      $("pilesPerBelt").textContent=pileLayout.count+" шт.";
+      $("pileStepOut").textContent=pileLayout.houseOffsetApplied
+        ? "400 мм от дома, далее ≈ "+fmt(pileLayout.step)+" мм"
+        : fmt(pileLayout.step)+" мм";
+      $("supports").textContent=totalPiles+" свай × 2500 мм";
+      $("pileInfo").textContent=
+        "Рядов пояса: "+beltLayout.count+
+        ". На каждом поясе: "+pileLayout.count+
+        " свай. Максимальный шаг — 1500 мм."+
+        (hasHouse?" Со стороны дома применяется отступ 400 мм.":"");
+    }
   }else if(base==="roof"){
     $("pilesPerBelt").textContent="—";
     $("pileStepOut").textContent="—";
@@ -1085,7 +1218,7 @@ function calculate(){
 
   updateViewSize(L,W);
 
-  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns};
+  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns,polygonStructure};
   setTimeout(()=>{
     renderPlan(lastModel);
     if(shapeMode==="free") renderPolygonEditor();
