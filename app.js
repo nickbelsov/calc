@@ -409,6 +409,17 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
   const bins=[];
   let reusedPieces=0;
 
+  const stocks=[...allowedLengths].sort((a,b)=>a-b);
+  if(!stocks.length) return emptyBoardResult();
+
+  const maxStock=Math.max(...stocks);
+  const oversized=pieceLengths.find(piece=>piece>maxStock+0.001);
+  if(oversized){
+    return emptyBoardResult(
+      "Раскладка невозможна: требуется цельная деталь "+fmt(oversized)+" мм, а максимальная выбранная длина доски — "+fmt(maxStock)+" мм."
+    );
+  }
+
   const pieces=[...pieceLengths].sort((a,b)=>b-a);
 
   for(const piece of pieces){
@@ -416,7 +427,7 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
     let bestRemaining=Infinity;
 
     for(let i=0;i<bins.length;i++){
-      if(bins[i].remaining>=piece){
+      if(bins[i].remaining+0.001>=piece){
         const after=bins[i].remaining-piece;
         if(after<bestRemaining){
           bestRemaining=after;
@@ -431,19 +442,25 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
       continue;
     }
 
-    const stock=chooseStockForRemaining(piece,allowedLengths);
-    if(!stock) return emptyBoardResult();
+    const stock=stocks.find(x=>x+0.001>=piece);
+    if(!stock){
+      return emptyBoardResult(
+        "Раскладка невозможна: деталь "+fmt(piece)+" мм не помещается ни в одну из выбранных длин."
+      );
+    }
+
     addPurchase(purchases,stock);
     bins.push({stock,remaining:stock-piece});
   }
 
-  const offcuts=bins.map(b=>b.remaining).filter(x=>x>0.5).sort((a,b)=>b-a);
+  const offcuts=bins.map(b=>Math.max(0,b.remaining)).filter(x=>x>0.5).sort((a,b)=>b-a);
 
   return {
     purchases,
     reusedPieces,
     finalWaste:offcuts.reduce((a,b)=>a+b,0),
-    offcuts
+    offcuts,
+    warning:""
   };
 }
 
@@ -466,6 +483,17 @@ function buildRowsHalf(runLength,rowCount,allowedLengths){
   // Закупку под геометрическую шахматку считаем отдельно:
   // детали упаковываются в доступные доски 3/4/6 м с повторным использованием остатков.
   const packed=packPiecesIntoStock(allPieceLengths,allowedLengths);
+
+  if(!packed.rows && packed.warning){
+    return {
+      rows:[],
+      purchases:packed.purchases,
+      reusedPieces:0,
+      finalWaste:0,
+      offcuts:[],
+      warning:packed.warning
+    };
+  }
 
   return {
     rows,
