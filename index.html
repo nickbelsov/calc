@@ -28,7 +28,7 @@
   </div>
 
   <div id="freeControls" class="hidden">
-    <small>Перетаскивай точки на плане. Нажми «+» на ребре, чтобы добавить новую вершину.</small>
+    <small>Перетаскивай точки на плане. Нажми «+» на ребре, чтобы добавить вершину. Нажми на размер ребра, чтобы ввести точное значение.</small>
     <button id="resetPolygon" type="button" class="secondaryBtn">Сбросить контур</button>
   </div>
 
@@ -112,6 +112,7 @@
     </div>
 
     <div id="terrace">
+      <div id="constructionLayer" class="constructionLayer"></div>
       <svg id="polygonEditor" class="polygonEditor hidden" viewBox="0 0 1000 700" preserveAspectRatio="none"></svg>
     </div>
 
