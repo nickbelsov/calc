@@ -150,3 +150,143 @@ body.view3d .threeViewport{display:block!important}
 body.view3d .zoomControls{visibility:hidden}
 
 @media(max-width:1280px){main{grid-template-columns:300px minmax(560px,1fr)}.result{display:none}.topNav{display:none}}
+
+/* NIMTECH identity + contemporary drawing system */
+.brand{min-width:410px}
+.brandWordmark{
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:12px;
+}
+.brandLogoMark{
+  width:45px;
+  height:45px;
+  object-fit:contain;
+  flex:0 0 auto;
+}
+.brandText{display:flex;flex-direction:column;line-height:1}
+.brandName{font-size:25px;letter-spacing:2.6px;font-weight:600}
+.brandTagline{
+  margin-top:6px;
+  font-size:6.5px;
+  letter-spacing:.65px;
+  color:#7c8082;
+  font-weight:500;
+}
+.workspace{
+  background:#f4f5f5;
+  background-image:
+    linear-gradient(rgba(157,163,166,.09) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(157,163,166,.09) 1px,transparent 1px);
+  background-size:32px 32px;
+}
+.canvasViewport{
+  background:#fbfbfa;
+  border:1px solid #e5e7e7;
+  box-shadow:0 14px 34px rgba(18,22,24,.035);
+}
+#terrace{
+  background:#ffffff;
+  border:1px solid #2f3437;
+  box-shadow:0 16px 42px rgba(25,30,33,.07);
+}
+#terrace.freeShape .constructionLayer{background:#fff}
+.boardPiece{
+  background:rgba(153,105,67,.025);
+  border:0;
+  box-shadow:
+    inset 0 -1px 0 rgba(112,77,51,.68),
+    inset 0 1px 0 rgba(255,255,255,.7);
+}
+.boardPiece.alt{
+  background:rgba(153,105,67,.025);
+}
+.joistLine,.joistLine.double{
+  background:#536978;
+  opacity:.82;
+  z-index:2;
+}
+.beltLine{
+  background:#b96240;
+  opacity:.9;
+  z-index:1;
+}
+.pileDot{
+  width:8px;
+  height:8px;
+  background:#73787b;
+  border:1.5px solid #fff;
+  box-shadow:0 0 0 1px rgba(89,94,97,.4);
+}
+.engineeringDimension{
+  color:#1f2427;
+  font-size:9.5px;
+  font-weight:500;
+}
+.engineeringDimension.x,
+.engineeringDimension.y{
+  border-color:rgba(32,37,40,.55);
+}
+.engineeringDimension.x:before,.engineeringDimension.x:after,
+.engineeringDimension.y:before,.engineeringDimension.y:after{
+  background:rgba(32,37,40,.55);
+}
+.engineeringDimension.x span,
+.engineeringDimension.y span{
+  background:#fff;
+  color:#1c2022;
+  border:1px solid #eceeee;
+  border-radius:3px;
+}
+.planCornerMark{
+  background:#fff;
+  border:1px solid #eceeee;
+  color:#979c9f;
+  border-radius:3px;
+}
+.layerControls{
+  box-shadow:0 7px 18px rgba(14,18,20,.04);
+}
+.layerChip:has(input:checked){
+  background:#f5f6f6;
+  box-shadow:inset 0 0 0 1px #e7e9e9;
+}
+.boardLayer .layerSwatch{background:#9b6a49}
+.joistLayer .layerSwatch{background:#536978}
+.beltLayer .layerSwatch{background:#b96240}
+.pileLayer .layerSwatch{background:#73787b}
+.legend{
+  border-radius:6px;
+  padding:8px 10px;
+  box-shadow:0 6px 16px rgba(18,22,24,.03);
+}
+.boardKey{background:#9b6a49}
+.regularJoistKey,.doubleJoistKey{background:#536978}
+.beltKey{background:#b96240}
+.pileKey{background:#73787b}
+.polygonFill{
+  fill:rgba(255,255,255,.01);
+  stroke:#252a2d;
+  stroke-width:3;
+}
+.openPolyline{stroke:#252a2d;stroke-width:3}
+.vertexHandle{
+  fill:#fff;
+  stroke:#202527;
+  stroke-width:2.5;
+}
+.addHandle{
+  fill:#fff;
+  stroke:#b4613f;
+  stroke-width:2.5;
+}
+.edgeLabel{
+  fill:#202527;
+  stroke:#fff;
+  stroke-width:7px;
+}
+@media(max-width:1280px){
+  .brand{min-width:auto}
+  .brandTagline{display:none}
+}
