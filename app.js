@@ -1370,7 +1370,7 @@ function updateControls(){
   $("concrete").classList.toggle("hidden",base!=="concrete");
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
   const free=$("shapeMode").value==="free";
-  $("rectControls").classList.toggle("hidden",false);
+  $("rectControls").classList.toggle("hidden",free);
   $("freeControls").classList.toggle("hidden",!free);
   $("polygonEditor").classList.toggle("hidden",!free);
   applyPolygonToTerrace();
