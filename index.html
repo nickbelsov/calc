@@ -25,6 +25,17 @@
     <option value="w">По ширине</option>
   </select>
 
+  <label>Вариант раскладки</label>
+  <select id="layoutMode">
+    <option value="optimal">Оптимальный раскрой</option>
+    <option value="aligned">Стыки в одну линию</option>
+    <option value="half">Вразбежку 1/2</option>
+    <option value="seamless">Без стыков</option>
+    <option value="frame" disabled>Рамка по периметру — следующий этап</option>
+    <option value="frameDivider" disabled>Рамка + разделительная доска — следующий этап</option>
+  </select>
+  <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
+
   <label>Расчётный модуль доски, мм</label>
   <input id="boardModule" type="number" value="150" min="50">
 
@@ -96,6 +107,9 @@
   <h2>Расчёт</h2>
   <p>Площадь <b id="area"></b></p>
   <p>Основание <b id="baseOut"></b></p>
+  <p>Режим раскладки <b id="layoutModeOut">—</b></p>
+
+  <div id="layoutWarning" class="info hidden"></div>
 
   <h3>Раскладка ДПК</h3>
   <p>Доступные длины <b>3 / 4 / 6 м</b></p>
