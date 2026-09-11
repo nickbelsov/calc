@@ -21,12 +21,12 @@ p b{text-align:right}.rule{display:block;color:#606872}
 .boardRow,.boardPiece,.seamMark,.joistLine,.beltLine,.pileDot,.dimLabel{position:absolute;pointer-events:none}
 .boardRow{z-index:4}.boardPiece{background:#b4875b;border:1px solid rgba(80,55,35,.28)}
 .boardPiece.alt{background:#a97b50}
-.joistLine{background:#2d3945;opacity:.72;z-index:2}.joistLine.double{background:#111820;opacity:.95}
+.joistLine{background:#2d3945;opacity:.82;z-index:2}.joistLine.double{background:#2d3945;opacity:.82}
 .beltLine{background:#aa6a1f;opacity:.9;z-index:1}
 .pileDot{width:12px;height:12px;border-radius:50%;background:#2b6cb0;border:2px solid #fff;box-shadow:0 0 0 1px #2b6cb0;z-index:3;transform:translate(-50%,-50%)}
 .dimLabel{font-size:10px;background:#fff;color:#30363d;padding:2px 4px;border-radius:4px;z-index:8;box-shadow:0 1px 3px #0002}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#555}.legend span{display:flex;align-items:center;gap:6px}.legend i{display:inline-block;width:18px;height:4px}
-.boardKey{background:#b4875b}.regularJoistKey{background:#2d3945}.doubleJoistKey{background:#111820}.beltKey{background:#aa6a1f}
+.boardKey{background:#b4875b}.regularJoistKey{background:#2d3945}.doubleJoistKey{background:#2d3945}.beltKey{background:#aa6a1f}
 .pileKey{width:10px!important;height:10px!important;border-radius:50%;background:#2b6cb0}
 .rowPlans{max-height:170px;overflow:auto;border:1px solid #e2e5e9;border-radius:7px;margin-top:10px}
 .rowPlan{font-size:11px;padding:7px 9px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;gap:8px}.rowPlan:last-child{border-bottom:0}
