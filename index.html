@@ -27,11 +27,10 @@
 
   <label>Расчётный модуль доски, мм</label>
   <input id="boardModule" type="number" value="150" min="50">
-  <small>Временно вручную. Позже значение будет браться из номенклатуры.</small>
 
   <label>Высота доски, мм</label>
   <input id="boardHeight" type="number" value="23" min="1">
-  <small>До 23 мм включительно — шаг лаг 300 мм; от 24 мм — 400 мм по осям.</small>
+  <small>До 23 мм — шаг лаг 300 мм; от 24 мм — 400 мм по осям.</small>
 
   <h3>Примыкание к дому</h3>
   <label class="checkrow"><input id="hasHouse" type="checkbox"> Терраса примыкает к дому</label>
@@ -43,7 +42,6 @@
       <option value="left">Левая сторона</option>
       <option value="right">Правая сторона</option>
     </select>
-    <small>Только со стороны дома крайний ряд пояса или крайняя свая отступает на 400 мм.</small>
   </div>
 
   <h3>Тип основания</h3>
@@ -57,8 +55,7 @@
     <p class="rule">Сваи под основной каркас: 2500 мм</p>
     <p class="rule">Сваи под крыльцо: 2000 мм</p>
     <p class="rule">Максимальный шаг свай: 1500 мм</p>
-    <p class="rule">Максимальный шаг рядов пояса 80×80: 1500 мм</p>
-    <p class="rule">Без примыкания к дому шаг распределяется равномерно по всей длине</p>
+    <p class="rule">Максимальный шаг пояса 80×80: 1500 мм</p>
   </div>
 
   <div id="concrete" class="hidden">
@@ -75,11 +72,21 @@
 
 <section>
   <div class="canvasWrap">
+    <div class="layerControls">
+      <label><input id="showBoards" type="checkbox" checked> ДПК</label>
+      <label><input id="showJoists" type="checkbox" checked> Лаги 40×40</label>
+      <label><input id="showBelts" type="checkbox" checked> Пояс 80×80</label>
+      <label><input id="showPiles" type="checkbox" checked> Сваи</label>
+    </div>
+
     <div id="terrace"></div>
+
     <div class="legend">
-      <span><i class="boardKey"></i> ДПК</span>
-      <span><i class="seamKey"></i> стык</span>
-      <span><i class="joistKey"></i> сдвоенная лага</span>
+      <span><i class="boardKey"></i> доска</span>
+      <span><i class="regularJoistKey"></i> лага 40×40</span>
+      <span><i class="doubleJoistKey"></i> сдвоенная лага</span>
+      <span><i class="beltKey"></i> пояс 80×80</span>
+      <span><i class="pileKey"></i> свая</span>
     </div>
   </div>
 </section>
