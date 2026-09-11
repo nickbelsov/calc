@@ -557,3 +557,10 @@ body.rightCollapsed .result{
 .stockCheck.good strong{color:#1f5f3c}
 .stockCheck.bad{background:#fff1ef;color:#8a574d}
 .stockCheck.bad strong{color:#8a382a}
+
+/* Calculation diagnostics */
+.algorithmDiagnostics{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.diagRow{padding:9px 10px;border:1px solid #e8eaea;border-radius:9px;background:#f8f9f9}
+.diagRow strong{display:block;margin-bottom:3px;color:#24282a;font-size:8.5px}
+.diagRow span{display:block;color:#777d80;font-size:8px;line-height:1.45}
+.rowPlan b{font-variant-numeric:tabular-nums}
