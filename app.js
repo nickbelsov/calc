@@ -303,12 +303,93 @@ function installPolygonPointerHandlers(){
   svg.addEventListener("pointercancel",stop);
 }
 
+function getSelectedWarehouseProduct(){
+  return window.NIMTECH_INVENTORY?.getProduct?.($("warehouseProduct")?.value) || null;
+}
+
 function getAllowedBoardLengths(){
   const values=[];
-  if($("allow3000")?.checked) values.push(3000);
-  if($("allow4000")?.checked) values.push(4000);
-  if($("allow6000")?.checked) values.push(6000);
+  const useWarehouse=$("useWarehouse")?.checked;
+  const product=getSelectedWarehouseProduct();
+
+  const permitted=len=>{
+    if(!useWarehouse || !product) return true;
+    return (product.variants?.[len]?.stock||0)>0;
+  };
+
+  if($("allow3000")?.checked && permitted(3000)) values.push(3000);
+  if($("allow4000")?.checked && permitted(4000)) values.push(4000);
+  if($("allow6000")?.checked && permitted(6000)) values.push(6000);
   return values;
+}
+
+function renderWarehouseUI(){
+  const api=window.NIMTECH_INVENTORY;
+  const select=$("warehouseProduct");
+  const status=$("warehouseStatus");
+  const lengths=$("warehouseLengths");
+  if(!api||!select||!status||!lengths) return;
+
+  if(!select.dataset.ready){
+    select.innerHTML="";
+    api.products.forEach(p=>{
+      const o=document.createElement("option");
+      o.value=p.id;
+      o.textContent=p.name;
+      select.appendChild(o);
+    });
+    select.dataset.ready="1";
+  }
+
+  const p=getSelectedWarehouseProduct();
+  if(!p) return;
+
+  status.textContent=api.mode==="mock"
+    ? "Тестовые остатки · позже заменим на API МоегоСклада"
+    : "Остатки синхронизированы с МоимСкладом";
+
+  lengths.innerHTML=[3000,4000,6000].map(len=>{
+    const v=p.variants?.[len]||{stock:0};
+    const cls=v.stock>0?"ok":"zero";
+    return '<span class="'+cls+'"><b>'+(len/1000)+' м</b><small>'+v.stock+' шт.</small></span>';
+  }).join("");
+
+  [["allow3000",3000],["allow4000",4000],["allow6000",6000]].forEach(([id,len])=>{
+    const el=$(id);
+    if(!el) return;
+    const unavailable=$("useWarehouse")?.checked && ((p.variants?.[len]?.stock||0)<=0);
+    el.disabled=unavailable;
+    if(unavailable) el.checked=false;
+  });
+}
+
+function renderStockCheck(boardRows){
+  const box=$("stockCheck");
+  if(!box) return;
+  if(!$("useWarehouse")?.checked){
+    box.className="stockCheck";
+    box.textContent="Складской режим выключен.";
+    return;
+  }
+
+  const p=getSelectedWarehouseProduct();
+  if(!p){
+    box.className="stockCheck bad";
+    box.textContent="Не выбрана складская позиция.";
+    return;
+  }
+
+  const shortages=[];
+  const lines=[3000,4000,6000].map(len=>{
+    const need=boardRows.purchases?.[len]||0;
+    const have=p.variants?.[len]?.stock||0;
+    if(need>have) shortages.push((len/1000)+" м: нужно "+need+", есть "+have);
+    return (len/1000)+" м — "+need+" / "+have+" шт.";
+  });
+
+  box.className="stockCheck "+(shortages.length?"bad":"good");
+  box.innerHTML="<strong>"+(shortages.length?"Недостаточно товара":"Товара достаточно")+"</strong><span>"+lines.join(" · ")+"</span>"+
+    (shortages.length?"<small>"+shortages.join("; ")+"</small>":"");
 }
 
 function emptyBoardResult(message){
@@ -1339,6 +1420,7 @@ function calculate(){
   $("boardWaste").textContent=fmt(boardRows.finalWaste/1000,2)+" м";
   $("seams").textContent=totalSeams+" шт.";
   renderRowPlans(boardRows);
+  renderStockCheck(boardRows);
 
   $("joistStepOut").textContent="до "+fmt(joists.actualMaxStep||joistStep)+" мм";
   $("checkJoistStep").textContent=fmt(joists.actualMaxStep||joistStep)+" / "+joistStep+" мм";
@@ -1434,13 +1516,14 @@ function updateControls(){
   $("polygonEditor").classList.toggle("hidden",!free);
   applyPolygonToTerrace();
   if(free) setTimeout(renderPolygonEditor,0);
+  renderWarehouseUI();
   const allowed=getAllowedBoardLengths();
   $("layoutHint").textContent=allowed.length
     ? (layoutHints[layoutMode]||"")
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","allow3000","allow4000","allow6000"].forEach(id=>{
+["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","allow3000","allow4000","allow6000","useWarehouse","warehouseProduct"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
