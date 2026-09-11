@@ -6,6 +6,8 @@ const baseNames = {
   roof: "Кровля / гидроизоляция"
 };
 
+let lastModel = null;
+
 function fmt(n, digits = 0) {
   return Number(n).toLocaleString("ru-RU", {
     minimumFractionDigits: digits,
@@ -35,7 +37,6 @@ function equalLayout(length, maxSpacing) {
 
 function equalLayoutWithHouseOffset(length, maxSpacing, houseOffset, houseAtStart) {
   if (length <= houseOffset) return equalLayout(length, maxSpacing);
-
   const remaining = length - houseOffset;
   const intervals = Math.max(1, Math.ceil(remaining / maxSpacing));
   const step = remaining / intervals;
@@ -45,19 +46,11 @@ function equalLayoutWithHouseOffset(length, maxSpacing, houseOffset, houseAtStar
     positions.push(houseOffset);
     for (let i = 1; i <= intervals; i++) positions.push(houseOffset + i * step);
   } else {
-    positions.push(0);
-    for (let i = 1; i <= intervals; i++) positions.push(i * step);
+    for (let i = 0; i <= intervals; i++) positions.push(i * step);
     positions[positions.length - 1] = length - houseOffset;
   }
 
-  return {
-    intervals,
-    count: positions.length,
-    step,
-    positions,
-    houseOffsetApplied: true,
-    houseOffset
-  };
+  return { intervals, count: positions.length, step, positions, houseOffsetApplied: true, houseOffset };
 }
 
 function chooseBoardCombination(runLength) {
@@ -132,59 +125,114 @@ function buildJoists(run, allSeams, maxStep) {
 
 function houseAffectsAxis(direction, houseSide, axis) {
   if (axis === "across") {
-    return direction === "l"
-      ? ["top", "bottom"].includes(houseSide)
-      : ["left", "right"].includes(houseSide);
+    return direction === "l" ? ["top","bottom"].includes(houseSide) : ["left","right"].includes(houseSide);
   }
-  return direction === "l"
-    ? ["left", "right"].includes(houseSide)
-    : ["top", "bottom"].includes(houseSide);
+  return direction === "l" ? ["left","right"].includes(houseSide) : ["top","bottom"].includes(houseSide);
 }
 
 function houseAtAxisStart(direction, houseSide, axis) {
-  if (axis === "across") {
-    if (direction === "l") return houseSide === "top";
-    return houseSide === "left";
+  if (axis === "across") return direction === "l" ? houseSide === "top" : houseSide === "left";
+  return direction === "l" ? houseSide === "left" : houseSide === "top";
+}
+
+function addLine(parent, cls, direction, pos, axisLength, isRunAxis) {
+  const w = parent.clientWidth;
+  const h = parent.clientHeight;
+  const px = isRunAxis
+    ? pos / axisLength * (direction === "l" ? w : h)
+    : pos / axisLength * (direction === "l" ? h : w);
+
+  const line = document.createElement("div");
+  line.className = cls;
+
+  if (isRunAxis) {
+    if (direction === "l") Object.assign(line.style,{left:px+"px",top:"0",width:cls.includes("beltLine")?"4px":"2px",height:"100%"});
+    else Object.assign(line.style,{top:px+"px",left:"0",height:cls.includes("beltLine")?"4px":"2px",width:"100%"});
+  } else {
+    if (direction === "l") Object.assign(line.style,{top:px+"px",left:"0",height:cls.includes("beltLine")?"4px":"2px",width:"100%"});
+    else Object.assign(line.style,{left:px+"px",top:"0",width:cls.includes("beltLine")?"4px":"2px",height:"100%"});
   }
-  if (direction === "l") return houseSide === "left";
-  return houseSide === "top";
+  parent.appendChild(line);
 }
 
 function renderPlan(model) {
   const terrace = $("terrace");
   terrace.innerHTML = "";
-  const { run, direction, rowCount, rowSeams, joists } = model;
-  const w = terrace.clientWidth;
-  const h = terrace.clientHeight;
-  const runPx = direction === "l" ? w : h;
-  const acrossPx = direction === "l" ? h : w;
 
-  for (let i = 1; i < rowCount; i++) {
-    const p = (i / rowCount) * acrossPx;
-    const line = document.createElement("div");
-    line.className = "boardLine";
-    if (direction === "l") Object.assign(line.style, { left: "0", top: p + "px", width: "100%", height: "1px" });
-    else Object.assign(line.style, { top: "0", left: p + "px", height: "100%", width: "1px" });
-    terrace.appendChild(line);
+  const { run, across, direction, rowCount, rowSeams, joists, beltLayout, pileLayout, base } = model;
+  const showBoards = $("showBoards").checked;
+  const showJoists = $("showJoists").checked;
+  const showBelts = $("showBelts").checked;
+  const showPiles = $("showPiles").checked;
+
+  if (showBelts) {
+    for (const pos of beltLayout.positions) addLine(terrace,"beltLine",direction,pos,across,false);
   }
 
-  const seamSet = uniquePositions(rowSeams.flat());
-  for (const seam of seamSet) {
-    const p = seam / run * runPx;
-    const line = document.createElement("div");
-    line.className = "seamLine";
-    if (direction === "l") Object.assign(line.style, { top: "0", left: p + "px", height: "100%", width: "2px" });
-    else Object.assign(line.style, { left: "0", top: p + "px", width: "100%", height: "2px" });
-    terrace.appendChild(line);
+  if (showJoists) {
+    for (const pos of joists.regular) addLine(terrace,"joistLine",direction,pos,run,true);
+    for (const pos of joists.seam) addLine(terrace,"joistLine double",direction,pos,run,true);
   }
 
-  for (const pos of joists.seam) {
-    const p = pos / run * runPx;
-    const line = document.createElement("div");
-    line.className = "joistLine";
-    if (direction === "l") Object.assign(line.style, { top: "0", left: p + "px", height: "100%", width: "3px" });
-    else Object.assign(line.style, { left: "0", top: p + "px", width: "100%", height: "3px" });
-    terrace.appendChild(line);
+  if (showBoards) {
+    const acrossPx = direction === "l" ? terrace.clientHeight : terrace.clientWidth;
+    for (let i = 1; i < rowCount; i++) {
+      const p = (i / rowCount) * acrossPx;
+      const line = document.createElement("div");
+      line.className = "boardLine";
+      if (direction === "l") Object.assign(line.style,{left:"0",top:p+"px",width:"100%",height:"1px"});
+      else Object.assign(line.style,{top:"0",left:p+"px",height:"100%",width:"1px"});
+      terrace.appendChild(line);
+    }
+
+    const seamSet = uniquePositions(rowSeams.flat());
+    for (const seam of seamSet) {
+      const w = terrace.clientWidth, h = terrace.clientHeight;
+      const p = seam / run * (direction === "l" ? w : h);
+      const line = document.createElement("div");
+      line.className = "seamLine";
+      if (direction === "l") Object.assign(line.style,{top:"0",left:p+"px",height:"100%",width:"2px"});
+      else Object.assign(line.style,{left:"0",top:p+"px",width:"100%",height:"2px"});
+      terrace.appendChild(line);
+    }
+  }
+
+  if (showPiles && base === "ground") {
+    const w = terrace.clientWidth, h = terrace.clientHeight;
+    for (const beltPos of beltLayout.positions) {
+      for (const pilePos of pileLayout.positions) {
+        const dot = document.createElement("div");
+        dot.className = "pileDot";
+
+        if (direction === "l") {
+          dot.style.left = (pilePos / run * w) + "px";
+          dot.style.top = (beltPos / across * h) + "px";
+        } else {
+          dot.style.left = (beltPos / across * w) + "px";
+          dot.style.top = (pilePos / run * h) + "px";
+        }
+
+        terrace.appendChild(dot);
+      }
+    }
+  }
+
+  if (base === "ground" && showBelts && beltLayout.count > 1) {
+    const label = document.createElement("div");
+    label.className = "dimLabel";
+    label.style.left = "8px";
+    label.style.top = "8px";
+    label.textContent = "пояс ≈ " + fmt(beltLayout.step) + " мм";
+    terrace.appendChild(label);
+  }
+
+  if (base === "ground" && showPiles && pileLayout.count > 1) {
+    const label = document.createElement("div");
+    label.className = "dimLabel";
+    label.style.right = "8px";
+    label.style.bottom = "8px";
+    label.textContent = "сваи ≈ " + fmt(pileLayout.step) + " мм";
+    terrace.appendChild(label);
   }
 }
 
@@ -246,24 +294,24 @@ function calculate() {
 
   $("area").textContent = fmt(L * W / 1e6, 2) + " м²";
   $("baseOut").textContent = baseNames[base];
-  $("rows").textContent = fmt(rowCount) + " шт.";
-  $("boardCount").textContent = fmt(boardsToBuy) + " шт.";
+  $("rows").textContent = rowCount + " шт.";
+  $("boardCount").textContent = boardsToBuy + " шт.";
   $("boardPlan").textContent = plan.combo.map(x => x / 1000 + " м").join(" + ");
   $("boardWaste").textContent = fmt(rawWaste / 1000, 2) + " м";
-  $("seams").textContent = fmt(totalSeams) + " шт.";
+  $("seams").textContent = totalSeams + " шт.";
 
   $("joistStepOut").textContent = joistStep + " мм";
-  $("regularJoists").textContent = fmt(joists.regular.length) + " шт. / " + fmt(regularJoistMeters, 1) + " м.п.";
-  $("doubleJoists").textContent = fmt(joists.seam.length) + " шт. / " + fmt(seamJoistMeters, 1) + " м.п.";
-  $("joists").textContent = fmt(totalJoistMeters, 1) + " м.п.";
-  $("joistPurchase").textContent = joistBuy.sticks + " хлыстов / " + fmt(joistBuy.meters, 0) + " м";
+  $("regularJoists").textContent = joists.regular.length + " шт. / " + fmt(regularJoistMeters,1) + " м.п.";
+  $("doubleJoists").textContent = joists.seam.length + " шт. / " + fmt(seamJoistMeters,1) + " м.п.";
+  $("joists").textContent = fmt(totalJoistMeters,1) + " м.п.";
+  $("joistPurchase").textContent = joistBuy.sticks + " хлыстов / " + fmt(joistBuy.meters) + " м";
 
   $("beltRows").textContent = beltLayout.count + " шт.";
   $("beltStepOut").textContent = beltLayout.houseOffsetApplied
     ? "400 мм от дома, далее ≈ " + fmt(beltLayout.step) + " мм"
     : fmt(beltLayout.step) + " мм";
-  $("belt").textContent = fmt(beltMeters, 1) + " м.п.";
-  $("beltPurchase").textContent = beltBuy.sticks + " хлыстов / " + fmt(beltBuy.meters, 0) + " м";
+  $("belt").textContent = fmt(beltMeters,1) + " м.п.";
+  $("beltPurchase").textContent = beltBuy.sticks + " хлыстов / " + fmt(beltBuy.meters) + " м";
 
   if (base === "ground") {
     $("pilesPerBelt").textContent = pileLayout.count + " шт.";
@@ -271,15 +319,11 @@ function calculate() {
       ? "400 мм от дома, далее ≈ " + fmt(pileLayout.step) + " мм"
       : fmt(pileLayout.step) + " мм";
     $("supports").textContent = totalPiles + " свай × 2500 мм";
-
-    const houseText = hasHouse
-      ? " Со стороны примыкания к дому применяется отступ 400 мм."
-      : " Примыкания к дому нет — правило 400 мм не применяется.";
-
     $("pileInfo").textContent =
       "Рядов пояса: " + beltLayout.count +
       ". На каждом поясе: " + pileLayout.count +
-      " свай. Максимальный шаг поясов и свай — 1500 мм." + houseText;
+      " свай. Максимальный шаг — 1500 мм." +
+      (hasHouse ? " Со стороны дома применяется отступ 400 мм." : "");
   } else if (base === "roof") {
     $("pilesPerBelt").textContent = "—";
     $("pileStepOut").textContent = "—";
@@ -300,7 +344,8 @@ function calculate() {
 
   updateViewSize(L, W);
 
-  setTimeout(() => renderPlan({ run, direction, rowCount, rowSeams, joists }), 0);
+  lastModel = { run, across, direction, rowCount, rowSeams, joists, beltLayout, pileLayout, base };
+  setTimeout(() => renderPlan(lastModel), 0);
 }
 
 function updateControls() {
@@ -312,8 +357,14 @@ function updateControls() {
 
 ["L","W","dir","base","boardModule","boardHeight","hasHouse","houseSide"].forEach(id => {
   const el = $(id);
-  if (el) el.addEventListener("input", () => { updateControls(); calculate(); });
-  if (el) el.addEventListener("change", () => { updateControls(); calculate(); });
+  if (el) {
+    el.addEventListener("input", () => { updateControls(); calculate(); });
+    el.addEventListener("change", () => { updateControls(); calculate(); });
+  }
+});
+
+["showBoards","showJoists","showBelts","showPiles"].forEach(id => {
+  $(id).addEventListener("change", () => { if (lastModel) renderPlan(lastModel); });
 });
 
 $("calc").addEventListener("click", calculate);
