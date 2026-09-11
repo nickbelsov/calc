@@ -1038,6 +1038,27 @@ function renderBoardRows(parent,model){
   });
 }
 
+function renderEngineeringDimensions(layer,model){
+  if(model.shapeMode!=="rect") return;
+  const L=+$("L").value||6200;
+  const W=+$("W").value||3800;
+
+  const dx=document.createElement("div");
+  dx.className="engineeringDimension x";
+  dx.innerHTML="<span>"+fmt(L)+" мм</span>";
+  layer.appendChild(dx);
+
+  const dy=document.createElement("div");
+  dy.className="engineeringDimension y";
+  dy.innerHTML="<span>"+fmt(W)+" мм</span>";
+  layer.appendChild(dy);
+
+  const mark=document.createElement("div");
+  mark.className="planCornerMark";
+  mark.textContent="ПЛАН · мм";
+  layer.appendChild(mark);
+}
+
 function renderPlan(model){
   const terrace=$("terrace");
   const layer=$("constructionLayer");
@@ -1112,6 +1133,8 @@ function renderPlan(model){
       }
     }
   }
+
+  renderEngineeringDimensions(layer,model);
 }
 
 function renderRowPlans(boardRows){
