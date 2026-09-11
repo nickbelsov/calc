@@ -52,3 +52,7 @@ p b{text-align:right}.rule{display:block;color:#606872}
 .polygonEditor.drawing{cursor:crosshair}
 .vertexHandle.closeTarget{fill:#e8f3eb;stroke:#2f7d45}
 .openPolyline{fill:none;stroke:#353b42;stroke-width:5;vector-effect:non-scaling-stroke}
+
+#terrace.freeShape{background:transparent;border-color:transparent;box-shadow:none}
+#terrace.freeShape .constructionLayer{background:#f0e2d2}
+#terrace.freeShape .polygonFill{fill:transparent;stroke:#353b42;stroke-width:4}
