@@ -13,11 +13,24 @@
 <aside>
   <h2>Проект</h2>
 
-  <label>Длина, мм</label>
-  <input id="L" type="number" value="6200" min="1000">
+  <label>Форма площадки</label>
+  <select id="shapeMode">
+    <option value="rect">Прямоугольник</option>
+    <option value="free">Произвольный контур</option>
+  </select>
 
-  <label>Ширина, мм</label>
-  <input id="W" type="number" value="3800" min="1000">
+  <div id="rectControls">
+    <label>Длина, мм</label>
+    <input id="L" type="number" value="6200" min="1000">
+
+    <label>Ширина, мм</label>
+    <input id="W" type="number" value="3800" min="1000">
+  </div>
+
+  <div id="freeControls" class="hidden">
+    <small>Перетаскивай точки на плане. Нажми «+» на ребре, чтобы добавить новую вершину.</small>
+    <button id="resetPolygon" type="button" class="secondaryBtn">Сбросить контур</button>
+  </div>
 
   <label>Направление доски</label>
   <select id="dir">
@@ -98,7 +111,9 @@
       <label><input id="showPiles" type="checkbox" checked> Сваи</label>
     </div>
 
-    <div id="terrace"></div>
+    <div id="terrace">
+      <svg id="polygonEditor" class="polygonEditor hidden" viewBox="0 0 1000 700" preserveAspectRatio="none"></svg>
+    </div>
 
     <div class="legend">
       <span><i class="boardKey"></i> доска</span>
@@ -113,6 +128,7 @@
 <aside class="result">
   <h2>Расчёт</h2>
   <p>Площадь <b id="area"></b></p>
+  <p>Габарит контура <b id="bboxOut">—</b></p>
   <p>Основание <b id="baseOut"></b></p>
   <p>Режим раскладки <b id="layoutModeOut">—</b></p>
 
