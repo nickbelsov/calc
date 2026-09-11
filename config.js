@@ -26,7 +26,8 @@ const CONFIG = {
   ground: {
     pileLength: 2500,
     porchPileLength: 2000,
-    pileSpacingMax: 1500
+    pileSpacingMax: 1500,
+    houseOffset: 400
   },
 
   overhang: {
