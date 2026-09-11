@@ -134,16 +134,22 @@
   <div class="canvasWrap">
     <div class="canvasToolbar">
       <div class="layerControls">
-      <label><input id="showBoards" type="checkbox" checked> ДПК</label>
-      <label><input id="showJoists" type="checkbox" checked> Профиль 40×40×2</label>
-      <label><input id="showBelts" type="checkbox" checked> Пояс 80×80</label>
-      <label><input id="showPiles" type="checkbox" checked> Сваи</label>
+        <label class="layerChip boardLayer"><input id="showBoards" type="checkbox" checked><span class="layerSwatch"></span><span>ДПК</span></label>
+        <label class="layerChip joistLayer"><input id="showJoists" type="checkbox" checked><span class="layerSwatch"></span><span>40×40×2</span></label>
+        <label class="layerChip beltLayer"><input id="showBelts" type="checkbox" checked><span class="layerSwatch"></span><span>80×80×2</span></label>
+        <label class="layerChip pileLayer"><input id="showPiles" type="checkbox" checked><span class="layerSwatch dot"></span><span>Сваи</span></label>
       </div>
       <div class="zoomControls">
-        <button id="zoomOut" type="button" title="Уменьшить">−</button>
-        <button id="zoomReset" type="button" title="100%">100%</button>
-        <button id="zoomIn" type="button" title="Увеличить">+</button>
-        <button id="zoomFit" type="button" title="Вписать в экран">Вписать</button>
+        <button id="zoomOut" class="iconBtn" type="button" title="Уменьшить" aria-label="Уменьшить">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"/></svg>
+        </button>
+        <button id="zoomReset" class="zoomValue" type="button" title="Сбросить масштаб">100%</button>
+        <button id="zoomIn" class="iconBtn" type="button" title="Увеличить" aria-label="Увеличить">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v10M7 12h10"/></svg>
+        </button>
+        <button id="zoomFit" class="iconBtn fitBtn" type="button" title="Вписать в экран" aria-label="Вписать в экран">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"/></svg>
+        </button>
       </div>
     </div>
 
@@ -158,11 +164,14 @@
       </div>
     </div>
 
-    <div class="legend">
+    <div class="canvasFooter">
+      <div class="legend">
       <span><i class="boardKey"></i> доска</span>
       <span><i class="regularJoistKey"></i> профиль 40×40×2</span>
       <span><i class="beltKey"></i> пояс 80×80</span>
       <span><i class="pileKey"></i> свая</span>
+      </div>
+      <div class="canvasHint">ПКМ — перемещение · колесо — масштаб</div>
     </div>
   </div>
 </section>
