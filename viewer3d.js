@@ -116,22 +116,6 @@ function rebuild(){
   const boardMat=0xb38359,joistMat=0x44494d,beltMat=0x8b684b,pileMat=0x6c7175;
   const dir=model.direction;
 
-  if(inp.shapeMode==='free' && inp.polygonClosed){
-    const pts=polygonMmPoints(inp);
-    if(pts.length>=3){
-      const shape=new THREE.Shape();
-      shape.moveTo(-sx/2+pts[0].x/1000,-sz/2+pts[0].z/1000);
-      for(let i=1;i<pts.length;i++) shape.lineTo(-sx/2+pts[i].x/1000,-sz/2+pts[i].z/1000);
-      shape.closePath();
-      const geo=new THREE.ShapeGeometry(shape);
-      const mat=new THREE.MeshStandardMaterial({color:0xd8c4af,roughness:.95,metalness:0,side:THREE.DoubleSide});
-      const mesh=new THREE.Mesh(geo,mat);
-      mesh.rotation.x=-Math.PI/2;
-      mesh.position.y=boardY-boardH/2-.004;
-      mesh.receiveShadow=true;
-      modelGroup.add(mesh);
-    }
-  }
 
   if(model.boardRows?.rows){
     const rowCount=model.boardRows.rows.length||1;
