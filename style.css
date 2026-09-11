@@ -42,3 +42,21 @@ p b{text-align:right;color:#202326;font-weight:600}.rule{display:block;color:#6e
 .constructionLayer{position:absolute;inset:0;z-index:1;overflow:hidden}.polygonEditor.drawing{cursor:crosshair}.vertexHandle.closeTarget{fill:#fff1eb;stroke:var(--accent)}.openPolyline{fill:none;stroke:#34393d;stroke-width:4;vector-effect:non-scaling-stroke}
 #terrace.freeShape{background:transparent;border-color:transparent;box-shadow:none}#terrace.freeShape .constructionLayer{background:#ead7c4}#terrace.freeShape .polygonFill{fill:transparent;stroke:#34393d;stroke-width:4}
 @media(max-width:1200px){main{grid-template-columns:285px 1fr}.result{display:none}}
+main{transition:grid-template-columns .22s ease}
+.settingsPanel,.result{position:relative;transition:padding .22s ease}
+.panelToggle{position:sticky;top:0;z-index:60;width:30px;height:30px;margin:0;padding:0;border:1px solid #dfe2e2;border-radius:6px;background:#fff;color:#4e555a;box-shadow:0 2px 8px #0000000d;font-size:22px;line-height:26px;display:flex;align-items:center;justify-content:center}
+.panelToggle:hover{background:#f4f4f2;color:#171a1d}
+.leftToggle{float:right;margin-right:-8px}.rightToggle{float:left;margin-left:-8px}
+body.leftCollapsed main{grid-template-columns:48px minmax(560px,1fr) 365px}
+body.rightCollapsed main{grid-template-columns:310px minmax(560px,1fr) 48px}
+body.leftCollapsed.rightCollapsed main{grid-template-columns:48px minmax(560px,1fr) 48px}
+body.leftCollapsed .settingsPanel,body.rightCollapsed .result{padding:18px 9px;overflow:hidden}
+body.leftCollapsed .settingsPanel .panelContent,body.rightCollapsed .result .panelContent{display:none}
+body.leftCollapsed .leftToggle{float:none;margin:0 auto}
+body.rightCollapsed .rightToggle{float:none;margin:0 auto}
+body.leftCollapsed .leftToggle{transform:rotate(180deg)}
+body.rightCollapsed .rightToggle{transform:rotate(180deg)}
+@media(max-width:1200px){
+  body.leftCollapsed main,body.rightCollapsed main,body.leftCollapsed.rightCollapsed main{grid-template-columns:48px 1fr}
+  body.rightCollapsed:not(.leftCollapsed) main{grid-template-columns:285px 1fr}
+}
