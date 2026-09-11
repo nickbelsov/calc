@@ -461,7 +461,9 @@ function addPurchase(purchases, stock) {
 function makeRowFromLengths(lengths, reusedFlags = []) {
   const pieces = lengths.map((length,i)=>({
     length,
+    cutLength:length,
     sourceLength:length,
+    stockLength:null,
     reused:!!reusedFlags[i]
   }));
   let x=0;
@@ -511,7 +513,14 @@ function buildRowsAligned(runLength,rowCount,allowedLengths){
   });
 
   const rows=[];
-  for(let r=0;r<rowCount;r++) rows.push(makeRowFromLengths(pattern.actual));
+  for(let r=0;r<rowCount;r++){
+    const row=makeRowFromLengths(pattern.actual);
+    row.pieces.forEach((piece,index)=>{
+      piece.stockLength=pattern.combo[index]||piece.length;
+      piece.sourceLength=piece.stockLength;
+    });
+    rows.push(row);
+  }
 
   return {
     rows,purchases,reusedPieces:0,
@@ -538,7 +547,12 @@ function buildRowsSeamless(runLength,rowCount,allowedLengths){
   }
   purchases[stock]=rowCount;
   const waste=(stock-runLength)*rowCount;
-  const rows=Array.from({length:rowCount},()=>makeRowFromLengths([runLength]));
+  const rows=Array.from({length:rowCount},()=>{
+    const row=makeRowFromLengths([runLength]);
+    row.pieces[0].stockLength=stock;
+    row.pieces[0].sourceLength=stock;
+    return row;
+  });
 
   return {rows,purchases,reusedPieces:0,finalWaste:waste,offcuts:[],warning:""};
 }
@@ -559,37 +573,54 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
     );
   }
 
-  const pieces=[...pieceLengths].sort((a,b)=>b-a);
+  const pieces=pieceLengths
+    .map((length,index)=>({length,index}))
+    .sort((a,b)=>b.length-a.length);
+
+  const allocations=Array(pieceLengths.length).fill(null);
 
   for(const piece of pieces){
     let bestBin=-1;
     let bestRemaining=Infinity;
 
-    for(let i=0;i<bins.length;i++){
-      if(bins[i].remaining+0.001>=piece){
-        const after=bins[i].remaining-piece;
+    for(let j=0;j<bins.length;j++){
+      if(bins[j].remaining+0.001>=piece.length){
+        const after=bins[j].remaining-piece.length;
         if(after<bestRemaining){
           bestRemaining=after;
-          bestBin=i;
+          bestBin=j;
         }
       }
     }
 
     if(bestBin>=0){
-      bins[bestBin].remaining-=piece;
+      const bin=bins[bestBin];
+      bin.remaining-=piece.length;
+      bin.cuts.push(piece.length);
+      allocations[piece.index]={
+        cutLength:piece.length,
+        stockLength:bin.stock,
+        reused:true
+      };
       reusedPieces++;
       continue;
     }
 
-    const stock=stocks.find(x=>x+0.001>=piece);
+    const stock=stocks.find(x=>x+0.001>=piece.length);
     if(!stock){
       return emptyBoardResult(
-        "Раскладка невозможна: деталь "+fmt(piece)+" мм не помещается ни в одну из выбранных длин."
+        "Раскладка невозможна: деталь "+fmt(piece.length)+" мм не помещается ни в одну из выбранных длин."
       );
     }
 
     addPurchase(purchases,stock);
-    bins.push({stock,remaining:stock-piece});
+    const bin={stock,remaining:stock-piece.length,cuts:[piece.length]};
+    bins.push(bin);
+    allocations[piece.index]={
+      cutLength:piece.length,
+      stockLength:stock,
+      reused:false
+    };
   }
 
   const offcuts=bins.map(b=>Math.max(0,b.remaining)).filter(x=>x>0.5).sort((a,b)=>b-a);
@@ -597,8 +628,10 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
   return {
     purchases,
     reusedPieces,
-    finalWaste:offcuts.reduce((a,b)=>a+b,0),
+    finalWaste:offcuts.reduce((x,y)=>x+y,0),
     offcuts,
+    allocations,
+    bins,
     warning:""
   };
 }
@@ -606,27 +639,30 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
 function buildRowsHalf(runLength,rowCount,allowedLengths){
   const rows=[];
   const allPieceLengths=[];
+  const pieceRefs=[];
 
   const half=runLength/2;
   const quarter=runLength/4;
 
   for(let r=0;r<rowCount;r++){
     const lengths = r%2===0
-      ? [half, half]
-      : [quarter, half, quarter];
+      ? [half,half]
+      : [quarter,half,quarter];
 
-    rows.push(makeRowFromLengths(lengths));
-    allPieceLengths.push(...lengths);
+    const row=makeRowFromLengths(lengths);
+    rows.push(row);
+
+    row.pieces.forEach(piece=>{
+      allPieceLengths.push(piece.length);
+      pieceRefs.push(piece);
+    });
   }
 
-  // Закупку под геометрическую шахматку считаем отдельно:
-  // детали упаковываются в доступные доски 3/4/6 м с повторным использованием остатков.
   const packed=packPiecesIntoStock(allPieceLengths,allowedLengths);
-
-  if((packed.rows?.length===0) && packed.warning){
+  if(packed.warning){
     return {
       rows:[],
-      purchases:packed.purchases,
+      purchases:packed.purchases||{3000:0,4000:0,6000:0},
       reusedPieces:0,
       finalWaste:0,
       offcuts:[],
@@ -634,13 +670,23 @@ function buildRowsHalf(runLength,rowCount,allowedLengths){
     };
   }
 
+  (packed.allocations||[]).forEach((allocation,index)=>{
+    const piece=pieceRefs[index];
+    if(!piece||!allocation) return;
+    piece.cutLength=allocation.cutLength;
+    piece.stockLength=allocation.stockLength;
+    piece.sourceLength=allocation.stockLength;
+    piece.reused=allocation.reused;
+  });
+
   return {
     rows,
     purchases:packed.purchases,
     reusedPieces:packed.reusedPieces,
     finalWaste:packed.finalWaste,
     offcuts:packed.offcuts,
-    warning:"Шахматка: ряд A = 1/2 + 1/2; ряд B = 1/4 + 1/2 + 1/4."
+    bins:packed.bins,
+    warning:"Равномерная шахматка: ряд A = 1/2 + 1/2; ряд B = 1/4 + 1/2 + 1/4. Повторяются только эти две схемы."
   };
 }
 
@@ -854,8 +900,11 @@ function getPolygonSeamPatterns(boardRows, mode){
   return {even:common,odd:common,all:uniquePositions(common)};
 }
 
-function applyPolygonSeamPatterns(boardRows, patterns){
+function applyPolygonSeamPatterns(boardRows,patterns,allowedLengths){
   if(!boardRows?.polygon) return boardRows;
+
+  const pieceRefs=[];
+  const pieceLengths=[];
 
   boardRows.rows.forEach((row,rowIndex)=>{
     const axes=(rowIndex%2===0 ? patterns.even : patterns.odd) || [];
@@ -864,24 +913,28 @@ function applyPolygonSeamPatterns(boardRows, patterns){
     for(const seg of row.segments||[]){
       const inside=axes
         .filter(x=>x>seg.start+1 && x<seg.start+seg.length-1)
-        .sort((a,b)=>a-b);
+        .sort((x,y)=>x-y);
 
       const cuts=[seg.start,...inside,seg.start+seg.length];
       const pieces=[];
       const seams=[];
 
-      for(let i=0;i<cuts.length-1;i++){
-        const len=cuts[i+1]-cuts[i];
-        pieces.push({length:len,sourceLength:len,reused:false});
-        if(i<cuts.length-2) seams.push(cuts[i+1]-seg.start);
+      for(let j=0;j<cuts.length-1;j++){
+        const len=cuts[j+1]-cuts[j];
+        const piece={
+          length:len,
+          cutLength:len,
+          sourceLength:len,
+          stockLength:null,
+          reused:false
+        };
+        pieces.push(piece);
+        pieceRefs.push(piece);
+        pieceLengths.push(len);
+        if(j<cuts.length-2) seams.push(cuts[j+1]-seg.start);
       }
 
-      nextSegments.push({
-        start:seg.start,
-        length:seg.length,
-        pieces,
-        seams
-      });
+      nextSegments.push({start:seg.start,length:seg.length,pieces,seams});
     }
 
     row.segments=nextSegments;
@@ -890,6 +943,29 @@ function applyPolygonSeamPatterns(boardRows, patterns){
       for(const seam of seg.seams) row.seams.push(seg.start+seam);
     }
   });
+
+  const packed=packPiecesIntoStock(pieceLengths,allowedLengths);
+  if(packed.warning){
+    boardRows.warning=[boardRows.warning,packed.warning].filter(Boolean).join(" ");
+    boardRows.purchases={3000:0,4000:0,6000:0};
+    boardRows.finalWaste=0;
+    boardRows.reusedPieces=0;
+    return boardRows;
+  }
+
+  (packed.allocations||[]).forEach((allocation,index)=>{
+    const piece=pieceRefs[index];
+    if(!piece||!allocation) return;
+    piece.stockLength=allocation.stockLength;
+    piece.sourceLength=allocation.stockLength;
+    piece.reused=allocation.reused;
+  });
+
+  boardRows.purchases=packed.purchases;
+  boardRows.reusedPieces=packed.reusedPieces;
+  boardRows.finalWaste=packed.finalWaste;
+  boardRows.offcuts=packed.offcuts;
+  boardRows.bins=packed.bins;
 
   return boardRows;
 }
@@ -971,25 +1047,25 @@ function buildJoists(run,allSeams,maxStep){
   };
 }
 
-function enforcePileEdgeCantilever(spanLength,layout,maxCantilever=200){
+function enforcePileEdgeCantilever(spanLength,layout,maxCantilever=200,options={}){
   if(!layout || !layout.positions?.length) return layout;
 
-  let positions=[...layout.positions].sort((a,b)=>a-b);
+  const exemptStart=!!options.exemptStart;
+  const exemptEnd=!!options.exemptEnd;
+  let positions=[...layout.positions].sort((x,y)=>x-y);
 
-  // Гарантируем, что крайний свес поддерживаемой конструкции
-  // от первой/последней опоры не превышает 200 мм.
-  if(positions[0] > maxCantilever){
+  if(!exemptStart && positions[0]>maxCantilever){
     positions.unshift(maxCantilever);
   }
-  if(spanLength - positions[positions.length-1] > maxCantilever){
+  if(!exemptEnd && spanLength-positions[positions.length-1]>maxCantilever){
     positions.push(spanLength-maxCantilever);
   }
 
   positions=uniquePositions(positions,1);
 
   let maxStep=0;
-  for(let i=0;i<positions.length-1;i++){
-    maxStep=Math.max(maxStep,positions[i+1]-positions[i]);
+  for(let j=0;j<positions.length-1;j++){
+    maxStep=Math.max(maxStep,positions[j+1]-positions[j]);
   }
 
   return {
@@ -998,7 +1074,9 @@ function enforcePileEdgeCantilever(spanLength,layout,maxCantilever=200){
     count:positions.length,
     step:maxStep||layout.step,
     edgeCantileverStart:positions[0],
-    edgeCantileverEnd:spanLength-positions[positions.length-1]
+    edgeCantileverEnd:spanLength-positions[positions.length-1],
+    cantileverExemptStart:exemptStart,
+    cantileverExemptEnd:exemptEnd
   };
 }
 
@@ -1027,7 +1105,15 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
           )
         : equalLayout(span.length,CONFIG.ground.pileSpacingMax);
 
-      layout=enforcePileEdgeCantilever(span.length,layout,CONFIG.joist.maxEdgeCantilever);
+      layout=enforcePileEdgeCantilever(
+        span.length,
+        layout,
+        CONFIG.joist.maxEdgeCantilever,
+        {
+          exemptStart:pileAffected&&houseAtStart,
+          exemptEnd:pileAffected&&!houseAtStart
+        }
+      );
 
       const piles=layout.positions.map(p=>span.start+p);
 
@@ -1283,10 +1369,21 @@ function renderRowPlans(boardRows){
 
     if(boardRows.polygon){
       pieces=row.segments.map(seg=>
-        seg.pieces.map(p=>fmt(p.length)+" мм").join(" + ")
+        seg.pieces.map(p=>{
+          const cut=fmt(p.cutLength||p.length)+" мм";
+          return p.stockLength && Math.abs(p.stockLength-(p.cutLength||p.length))>1
+            ? cut+" ← "+fmt(p.stockLength)
+            : cut;
+        }).join(" + ")
       ).join("  |  ");
     }else{
-      pieces=row.pieces.map(p=>(p.reused?"остаток ":"")+fmt(p.length)+" мм").join(" + ");
+      pieces=row.pieces.map(p=>{
+        const cut=fmt(p.cutLength||p.length)+" мм";
+        const stock=p.stockLength && Math.abs(p.stockLength-(p.cutLength||p.length))>1
+          ? " ← "+fmt(p.stockLength)
+          : "";
+        return (p.reused?"остаток ":"")+cut+stock;
+      }).join(" + ");
     }
 
     div.innerHTML="<span>Ряд "+(i+1)+"</span><b>"+pieces+"</b>";
@@ -1312,6 +1409,92 @@ function updateViewSize(L,W){
   // Не искажаем пропорции даже у очень длинных / узких контуров.
   t.style.width=Math.max(24,safeL*scale)+"px";
   t.style.height=Math.max(24,safeW*scale)+"px";
+}
+
+function buildAlgorithmDiagnostics(model){
+  const lines=[];
+  const {run,across,joists,beltLayout,pileLayout,base,boardRows,seamPatterns,shapeMode}=model;
+
+  lines.push({
+    title:"ДПК",
+    text:"Закупочные длины: "+getAllowedBoardLengths().map(x=>x/1000+" м").join(" / ")+
+      ". Фактические детали считаются отдельно от закупочных досок."
+  });
+
+  if($("layoutMode").value==="half"){
+    const aSeams=shapeMode==="free" ? seamPatterns.even : [run/2];
+    const bSeams=shapeMode==="free" ? seamPatterns.odd : [run/4,3*run/4];
+    lines.push({
+      title:"Шахматка",
+      text:"Повторяются 2 ряда. Оси A: "+(aSeams.length?aSeams.map(fmt).join(", ")+" мм":"нет")+
+        ". Оси B: "+(bSeams.length?bSeams.map(fmt).join(", ")+" мм":"нет")+"."
+    });
+  }
+
+  lines.push({
+    title:"40×40×2",
+    text:"Шаг по осям не более "+joistStepByBoardHeight(+$("boardHeight").value||23)+
+      " мм. Обычных линий: "+joists.regular.length+
+      ", линий под стыками: "+joists.seam.length+
+      ". Фактический максимальный шаг: "+fmt(joists.actualMaxStep)+" мм."
+  });
+
+  lines.push({
+    title:"Края 40×40×2",
+    text:"Свес слева/справа: "+fmt(joists.edgeOverhangStart)+" / "+fmt(joists.edgeOverhangEnd)+
+      " мм, предел "+CONFIG.joist.maxEdgeCantilever+" мм."
+  });
+
+  lines.push({
+    title:"80×80×2",
+    text:"Рядов: "+beltLayout.count+
+      ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
+  });
+
+  if(base==="ground" && pileLayout){
+    const houseException=pileLayout.houseOffsetApplied
+      ? " Со стороны дома действует отдельный отступ "+CONFIG.ground.houseOffset+" мм."
+      : "";
+    lines.push({
+      title:"Сваи",
+      text:"На один пояс: "+pileLayout.count+
+        ", максимальный шаг "+fmt(pileLayout.step)+" мм, предел "+CONFIG.ground.pileSpacingMax+" мм."+
+        houseException
+    });
+  }else if(base==="ground" && model.polygonStructure){
+    lines.push({
+      title:"Сваи",
+      text:"Расставлены по каждому фактическому участку пояса; максимальный найденный шаг "+
+        fmt(model.polygonStructure.maxPileStep)+" мм."
+    });
+  }
+
+  const joistBuy=stockPurchase(model.totalJoistMeters||0);
+  const beltBuy=stockPurchase(model.beltMeters||0);
+  lines.push({
+    title:"Металл",
+    text:"40×40×2: "+fmt(model.totalJoistMeters||0,1)+" м.п. → "+
+      joistBuy.sticks+" × 6 м. 80×80×2: "+fmt(model.beltMeters||0,1)+" м.п. → "+
+      beltBuy.sticks+" × 6 м. Резка и сварка разрешены."
+  });
+
+  const purchases=boardRows?.purchases||{};
+  lines.push({
+    title:"Закупка ДПК",
+    text:"3 м: "+(purchases[3000]||0)+" шт.; 4 м: "+(purchases[4000]||0)+
+      " шт.; 6 м: "+(purchases[6000]||0)+" шт. Обрезки можно использовать как самостоятельные детали, но нельзя соединять обратно в одну доску."
+  });
+
+  return lines;
+}
+
+function renderAlgorithmDiagnostics(model){
+  const box=$("algorithmDiagnostics");
+  if(!box||!model) return;
+  const lines=buildAlgorithmDiagnostics(model);
+  box.innerHTML=lines.map(line=>
+    '<div class="diagRow"><strong>'+line.title+'</strong><span>'+line.text+'</span></div>'
+  ).join("");
 }
 
 function calculate(){
@@ -1342,7 +1525,7 @@ function calculate(){
 
   if(shapeMode==="free" && boardRows.polygon){
     seamPatterns=getPolygonSeamPatterns(boardRows,layoutMode);
-    boardRows=applyPolygonSeamPatterns(boardRows,seamPatterns);
+    boardRows=applyPolygonSeamPatterns(boardRows,seamPatterns,allowedLengths);
     allSeams=seamPatterns.all;
   }else{
     allSeams=uniquePositions((boardRows.rows||[]).flatMap(r=>r.seams));
@@ -1384,7 +1567,15 @@ function calculate(){
       ? equalLayoutWithHouseOffset(run,CONFIG.ground.pileSpacingMax,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"run"))
       : equalLayout(run,CONFIG.ground.pileSpacingMax);
 
-    pileLayout=enforcePileEdgeCantilever(run,pileLayout,CONFIG.joist.maxEdgeCantilever);
+    pileLayout=enforcePileEdgeCantilever(
+      run,
+      pileLayout,
+      CONFIG.joist.maxEdgeCantilever,
+      {
+        exemptStart:pileAffected&&houseAtAxisStart(direction,houseSide,"run"),
+        exemptEnd:pileAffected&&!houseAtAxisStart(direction,houseSide,"run")
+      }
+    );
 
     totalPiles=beltLayout.count*pileLayout.count;
   }
@@ -1471,7 +1662,7 @@ function calculate(){
         "Рядов пояса: "+beltLayout.count+
         ". На каждом поясе: "+pileLayout.count+
         " свай. Максимальный шаг — 1500 мм."+
-        (hasHouse?" Со стороны дома применяется отступ 400 мм.":"");
+        (hasHouse?" Со стороны дома применяется отдельный отступ 400 мм; правило 200 мм к этой стороне не применяется.":"");
     }
   }else if(base==="roof"){
     $("pilesPerBelt").textContent="—";
@@ -1494,7 +1685,12 @@ function calculate(){
 
   updateViewSize(L,W);
 
-  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns,polygonStructure};
+  lastModel={
+    run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns,polygonStructure,
+    totalJoistMeters,beltMeters,totalPiles,
+    algorithmVersion:CONFIG.algorithmVersion
+  };
+  renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
     renderPlan(lastModel);
     if(shapeMode==="free") renderPolygonEditor();
