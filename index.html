@@ -36,6 +36,14 @@
   </select>
   <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
 
+  <label>Разрешённые длины доски</label>
+  <div class="lengthOptions">
+    <label><input id="allow3000" type="checkbox" checked> 3 м</label>
+    <label><input id="allow4000" type="checkbox" checked> 4 м</label>
+    <label><input id="allow6000" type="checkbox" checked> 6 м</label>
+  </div>
+  <small>Расчёт использует только выбранные длины. Позже этот список будет формироваться автоматически по остаткам склада.</small>
+
   <label>Расчётный модуль доски, мм</label>
   <input id="boardModule" type="number" value="150" min="50">
 
@@ -111,7 +119,7 @@
   <div id="layoutWarning" class="info hidden"></div>
 
   <h3>Раскладка ДПК</h3>
-  <p>Доступные длины <b>3 / 4 / 6 м</b></p>
+  <p>Доступные длины <b id="allowedLengthsOut">—</b></p>
   <p>Рядов доски <b id="rows">—</b></p>
   <p>Закупка 3 м <b id="buy3000">—</b></p>
   <p>Закупка 4 м <b id="buy4000">—</b></p>
