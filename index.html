@@ -115,16 +115,29 @@
     <div class="workspaceBadge">мм</div>
   </div>
   <div class="canvasWrap">
-    <div class="layerControls">
+    <div class="canvasToolbar">
+      <div class="layerControls">
       <label><input id="showBoards" type="checkbox" checked> ДПК</label>
       <label><input id="showJoists" type="checkbox" checked> Профиль 40×40×2</label>
       <label><input id="showBelts" type="checkbox" checked> Пояс 80×80</label>
       <label><input id="showPiles" type="checkbox" checked> Сваи</label>
+      </div>
+      <div class="zoomControls">
+        <button id="zoomOut" type="button" title="Уменьшить">−</button>
+        <button id="zoomReset" type="button" title="100%">100%</button>
+        <button id="zoomIn" type="button" title="Увеличить">+</button>
+        <button id="zoomFit" type="button" title="Вписать в экран">Вписать</button>
+      </div>
     </div>
 
+    <div id="canvasViewport" class="canvasViewport">
+      <div id="canvasScene" class="canvasScene">
     <div id="terrace" class="terraceCanvas">
       <div id="constructionLayer" class="constructionLayer"></div>
       <svg id="polygonEditor" class="polygonEditor hidden" viewBox="0 0 1000 700" preserveAspectRatio="none"></svg>
+    </div>
+
+      </div>
     </div>
 
     <div class="legend">
