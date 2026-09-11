@@ -60,3 +60,13 @@ body.rightCollapsed .rightToggle{transform:rotate(180deg)}
   body.leftCollapsed main,body.rightCollapsed main,body.leftCollapsed.rightCollapsed main{grid-template-columns:48px 1fr}
   body.rightCollapsed:not(.leftCollapsed) main{grid-template-columns:285px 1fr}
 }
+
+.canvasToolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;width:min(920px,100%)}
+.zoomControls{display:flex;gap:4px;background:#fff;border:1px solid #e0e2e1;border-radius:7px;padding:4px;box-shadow:0 3px 14px #00000008}
+.zoomControls button{width:auto;min-width:34px;height:30px;margin:0;padding:0 9px;border:0;background:transparent;color:#4f565b;border-radius:4px;font-size:11px}
+.zoomControls button:hover{background:#f2f3f1;color:#15191c}
+.canvasViewport{position:relative;width:min(920px,100%);height:min(68vh,620px);min-height:420px;overflow:hidden;cursor:default}
+.canvasViewport.panning{cursor:grabbing}
+.canvasScene{position:absolute;left:50%;top:50%;transform-origin:0 0;will-change:transform}
+body.spacePan .canvasViewport{cursor:grab}
+body.spacePan .canvasViewport.panning{cursor:grabbing}
