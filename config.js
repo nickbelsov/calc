@@ -1,4 +1,5 @@
 const CONFIG = {
+  algorithmVersion: "2.0",
   boardLengths: [3000, 4000, 6000],
   defaultBoardModule: 150,
 
@@ -33,5 +34,16 @@ const CONFIG = {
   overhang: {
     min: 100,
     max: 150
+  },
+
+  rules: {
+    boardStockIsDiscrete: true,
+    boardStockCannotBeRejoined: true,
+    boardOffcutsCanBeReusedAsWholePieces: true,
+    metalCanBeCutAndWelded: true,
+    metalPurchaseMultiple: 6000,
+    preferredLayout: "half",
+    houseSidePileOffset: 400,
+    freeEdgeSupportCantileverMax: 200
   }
 };
