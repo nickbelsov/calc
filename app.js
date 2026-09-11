@@ -1263,3 +1263,34 @@ $("calc").addEventListener("click",calculate);
 installPolygonPointerHandlers();
 updateControls();
 calculate();
+function updatePanelToggleTitles(){
+  const leftCollapsed=document.body.classList.contains("leftCollapsed");
+  const rightCollapsed=document.body.classList.contains("rightCollapsed");
+  const left=$("toggleLeft"),right=$("toggleRight");
+  if(left){
+    left.title=leftCollapsed?"Развернуть параметры":"Свернуть параметры";
+    left.setAttribute("aria-label",left.title);
+  }
+  if(right){
+    right.title=rightCollapsed?"Развернуть расчёт":"Свернуть расчёт";
+    right.setAttribute("aria-label",right.title);
+  }
+}
+
+$("toggleLeft")?.addEventListener("click",()=>{
+  document.body.classList.toggle("leftCollapsed");
+  localStorage.setItem("nimtechLeftCollapsed",document.body.classList.contains("leftCollapsed")?"1":"0");
+  updatePanelToggleTitles();
+  setTimeout(()=>{ if(lastModel) renderPlan(lastModel); },240);
+});
+
+$("toggleRight")?.addEventListener("click",()=>{
+  document.body.classList.toggle("rightCollapsed");
+  localStorage.setItem("nimtechRightCollapsed",document.body.classList.contains("rightCollapsed")?"1":"0");
+  updatePanelToggleTitles();
+  setTimeout(()=>{ if(lastModel) renderPlan(lastModel); },240);
+});
+
+if(localStorage.getItem("nimtechLeftCollapsed")==="1") document.body.classList.add("leftCollapsed");
+if(localStorage.getItem("nimtechRightCollapsed")==="1") document.body.classList.add("rightCollapsed");
+updatePanelToggleTitles();
