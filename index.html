@@ -33,6 +33,19 @@
   <input id="boardHeight" type="number" value="23" min="1">
   <small>До 23 мм включительно — шаг лаг 300 мм; от 24 мм — 400 мм по осям.</small>
 
+  <h3>Примыкание к дому</h3>
+  <label class="checkrow"><input id="hasHouse" type="checkbox"> Терраса примыкает к дому</label>
+  <div id="houseControls" class="hidden">
+    <label>Сторона примыкания</label>
+    <select id="houseSide">
+      <option value="top">Верхняя сторона</option>
+      <option value="bottom">Нижняя сторона</option>
+      <option value="left">Левая сторона</option>
+      <option value="right">Правая сторона</option>
+    </select>
+    <small>Только со стороны дома крайний ряд пояса или крайняя свая отступает на 400 мм.</small>
+  </div>
+
   <h3>Тип основания</h3>
   <select id="base">
     <option value="ground">Грунт / земля</option>
@@ -45,7 +58,7 @@
     <p class="rule">Сваи под крыльцо: 2000 мм</p>
     <p class="rule">Максимальный шаг свай: 1500 мм</p>
     <p class="rule">Максимальный шаг рядов пояса 80×80: 1500 мм</p>
-    <p class="rule">Шаг распределяется равномерно по всей длине</p>
+    <p class="rule">Без примыкания к дому шаг распределяется равномерно по всей длине</p>
   </div>
 
   <div id="concrete" class="hidden">
@@ -93,13 +106,13 @@
 
   <h3>Опорный пояс 80×80×2</h3>
   <p>Количество рядов <b id="beltRows">—</b></p>
-  <p>Равномерный шаг <b id="beltStepOut">—</b></p>
+  <p>Шаг / схема <b id="beltStepOut">—</b></p>
   <p>Фактический погонаж <b id="belt">—</b></p>
   <p>Закупка по 6 м <b id="beltPurchase">—</b></p>
 
   <h3>Опоры / сваи</h3>
   <p>Свай на один пояс <b id="pilesPerBelt">—</b></p>
-  <p>Равномерный шаг свай <b id="pileStepOut">—</b></p>
+  <p>Шаг / схема свай <b id="pileStepOut">—</b></p>
   <p>Всего свай <b id="supports">—</b></p>
 
   <div id="pileInfo" class="info"></div>
