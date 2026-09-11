@@ -1,0 +1,1 @@
+const CONFIG={boardLengths:[3000,4000,6000],joist:{size:'40×40×2',minStep:300,maxStep:400,defaultStep:350},belt:{size:'80×80×2'},overhang:{min:100,max:150},ground:{pileLength:2500,porchPileLength:2000,pileSpacingMin:1000,pileSpacingMax:2000,minEdge:400}};
