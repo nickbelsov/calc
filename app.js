@@ -53,44 +53,105 @@ function equalLayoutWithHouseOffset(length, maxSpacing, houseOffset, houseAtStar
   return { intervals, count: positions.length, step, positions, houseOffsetApplied: true, houseOffset };
 }
 
-function chooseBoardCombination(runLength) {
-  const lengths = CONFIG.boardLengths;
-  const maxPieces = Math.ceil(runLength / Math.min(...lengths)) + 2;
-  let best = null;
-
-  function walk(combo, sum, depth) {
-    if (sum >= runLength) {
-      const waste = sum - runLength;
-      const candidate = { combo: [...combo], sum, waste, pieces: combo.length };
-      if (!best || candidate.waste < best.waste || (candidate.waste === best.waste && candidate.pieces < best.pieces)) best = candidate;
-      return;
-    }
-    if (depth >= maxPieces) return;
-    for (const len of lengths) {
-      combo.push(len);
-      walk(combo, sum + len, depth + 1);
-      combo.pop();
-    }
-  }
-
-  walk([], 0, 0);
-  const actual = [...best.combo];
-  if (best.waste > 0) actual[actual.length - 1] -= best.waste;
-  return { ...best, actual };
+function chooseStockForRemaining(remaining) {
+  const sorted = [...CONFIG.boardLengths].sort((a,b) => a-b);
+  const fitting = sorted.find(x => x >= remaining);
+  return fitting || sorted[sorted.length - 1];
 }
 
-function seamPositions(actualPieces, runLength, mirrored = false) {
-  const seams = [];
-  let x = 0;
-  for (let i = 0; i < actualPieces.length - 1; i++) {
-    x += actualPieces[i];
-    seams.push(x);
+function takeBestOffcut(offcuts, remaining) {
+  let bestIndex = -1;
+  let bestScore = Infinity;
+
+  for (let i = 0; i < offcuts.length; i++) {
+    const len = offcuts[i];
+    if (len <= 0) continue;
+
+    // Остаток имеет смысл использовать, если он закрывает весь оставшийся размер
+    // либо уменьшает его без создания совсем короткого бессмысленного элемента.
+    const used = Math.min(len, remaining);
+    const remainder = remaining - used;
+    const score = remainder === 0 ? 0 : remainder + (len > remaining ? len - remaining : 0);
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
   }
-  return mirrored ? seams.map(x => runLength - x).sort((a, b) => a - b) : seams;
+
+  return bestIndex;
+}
+
+function buildBoardRows(runLength, rowCount) {
+  const offcuts = [];
+  const purchases = {3000:0, 4000:0, 6000:0};
+  const rows = [];
+  let reusedPieces = 0;
+
+  for (let r = 0; r < rowCount; r++) {
+    let remaining = runLength;
+    const pieces = [];
+
+    while (remaining > 0.5) {
+      let usedFromOffcut = false;
+      const offcutIndex = takeBestOffcut(offcuts, remaining);
+
+      if (offcutIndex >= 0) {
+        const available = offcuts[offcutIndex];
+
+        // Используем остаток прежде новой доски, но не режем остаток,
+        // если новая целая доска закроет ряд меньшим количеством стыков.
+        if (available >= remaining || remaining > 3000) {
+          const used = Math.min(available, remaining);
+          pieces.push({length: used, sourceLength: available, reused: true});
+          reusedPieces++;
+
+          if (available > used + 0.5) offcuts[offcutIndex] = available - used;
+          else offcuts.splice(offcutIndex, 1);
+
+          remaining -= used;
+          usedFromOffcut = true;
+        }
+      }
+
+      if (usedFromOffcut) continue;
+
+      const stock = chooseStockForRemaining(remaining);
+      purchases[stock]++;
+
+      const used = Math.min(stock, remaining);
+      pieces.push({length: used, sourceLength: stock, reused: false});
+      remaining -= used;
+
+      const leftover = stock - used;
+      if (leftover > 0.5) offcuts.push(leftover);
+    }
+
+    if (r % 2 === 1) pieces.reverse();
+
+    let x = 0;
+    const seams = [];
+    for (let i = 0; i < pieces.length - 1; i++) {
+      x += pieces[i].length;
+      seams.push(x);
+    }
+
+    rows.push({pieces, seams});
+  }
+
+  offcuts.sort((a,b)=>b-a);
+
+  return {
+    rows,
+    purchases,
+    reusedPieces,
+    finalWaste: offcuts.reduce((a,b)=>a+b,0),
+    offcuts
+  };
 }
 
 function uniquePositions(values, tolerance = 2) {
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].sort((a,b)=>a-b);
   const out = [];
   for (const v of sorted) {
     if (!out.length || Math.abs(out[out.length - 1] - v) > tolerance) out.push(v);
@@ -102,11 +163,14 @@ function regularJoistPositions(run, maxStep) {
   const edge = Math.min(CONFIG.joist.maxEdgeCantilever, run / 2);
   const start = edge;
   const end = run - edge;
+
   if (end <= start) return [run / 2];
+
   const span = end - start;
   const intervals = Math.max(1, Math.ceil(span / maxStep));
   const step = span / intervals;
   const positions = [];
+
   for (let i = 0; i <= intervals; i++) positions.push(start + step * i);
   return positions;
 }
@@ -114,13 +178,21 @@ function regularJoistPositions(run, maxStep) {
 function buildJoists(run, allSeams, maxStep) {
   const seamOffset = CONFIG.joist.seamOverhang;
   const doubled = [];
+
   for (const seam of allSeams) {
     if (seam - seamOffset > 0) doubled.push(seam - seamOffset);
     if (seam + seamOffset < run) doubled.push(seam + seamOffset);
   }
+
   const seamJoists = uniquePositions(doubled);
-  const regular = regularJoistPositions(run, maxStep).filter(p => !seamJoists.some(s => Math.abs(s - p) < 80));
-  return { regular: uniquePositions(regular), seam: seamJoists, all: uniquePositions([...regular, ...seamJoists]) };
+  const regular = regularJoistPositions(run, maxStep)
+    .filter(p => !seamJoists.some(s => Math.abs(s - p) < 80));
+
+  return {
+    regular: uniquePositions(regular),
+    seam: seamJoists,
+    all: uniquePositions([...regular, ...seamJoists])
+  };
 }
 
 function houseAffectsAxis(direction, houseSide, axis) {
@@ -152,53 +224,95 @@ function addLine(parent, cls, direction, pos, axisLength, isRunAxis) {
     if (direction === "l") Object.assign(line.style,{top:px+"px",left:"0",height:cls.includes("beltLine")?"4px":"2px",width:"100%"});
     else Object.assign(line.style,{left:px+"px",top:"0",width:cls.includes("beltLine")?"4px":"2px",height:"100%"});
   }
+
   parent.appendChild(line);
+}
+
+function renderBoardRows(terrace, model) {
+  const {direction, run, across, boardRows} = model;
+  const w = terrace.clientWidth;
+  const h = terrace.clientHeight;
+  const rowCount = boardRows.rows.length;
+
+  boardRows.rows.forEach((row, rowIndex) => {
+    const rowStart = rowIndex / rowCount;
+    const rowEnd = (rowIndex + 1) / rowCount;
+
+    let cursor = 0;
+
+    row.pieces.forEach((piece, pieceIndex) => {
+      const el = document.createElement("div");
+      el.className = "boardPiece" + (piece.reused ? " alt" : "");
+
+      const a = cursor / run;
+      const b = (cursor + piece.length) / run;
+
+      if (direction === "l") {
+        Object.assign(el.style,{
+          left:(a*w)+"px",
+          width:Math.max(1,(b-a)*w)+"px",
+          top:(rowStart*h)+"px",
+          height:Math.max(1,(rowEnd-rowStart)*h)+"px"
+        });
+      } else {
+        Object.assign(el.style,{
+          top:(a*h)+"px",
+          height:Math.max(1,(b-a)*h)+"px",
+          left:(rowStart*w)+"px",
+          width:Math.max(1,(rowEnd-rowStart)*w)+"px"
+        });
+      }
+
+      terrace.appendChild(el);
+      cursor += piece.length;
+
+      if (pieceIndex < row.pieces.length - 1) {
+        const seam = document.createElement("div");
+        seam.className = "seamMark";
+
+        if (direction === "l") {
+          Object.assign(seam.style,{
+            left:(cursor/run*w)+"px",
+            top:(rowStart*h)+"px",
+            width:"2px",
+            height:Math.max(2,(rowEnd-rowStart)*h)+"px"
+          });
+        } else {
+          Object.assign(seam.style,{
+            top:(cursor/run*h)+"px",
+            left:(rowStart*w)+"px",
+            height:"2px",
+            width:Math.max(2,(rowEnd-rowStart)*w)+"px"
+          });
+        }
+
+        terrace.appendChild(seam);
+      }
+    });
+  });
 }
 
 function renderPlan(model) {
   const terrace = $("terrace");
   terrace.innerHTML = "";
 
-  const { run, across, direction, rowCount, rowSeams, joists, beltLayout, pileLayout, base } = model;
-  const showBoards = $("showBoards").checked;
-  const showJoists = $("showJoists").checked;
-  const showBelts = $("showBelts").checked;
-  const showPiles = $("showPiles").checked;
+  const {run, across, direction, joists, beltLayout, pileLayout, base} = model;
 
-  if (showBelts) {
+  if ($("showBelts").checked) {
     for (const pos of beltLayout.positions) addLine(terrace,"beltLine",direction,pos,across,false);
   }
 
-  if (showJoists) {
+  if ($("showJoists").checked) {
     for (const pos of joists.regular) addLine(terrace,"joistLine",direction,pos,run,true);
     for (const pos of joists.seam) addLine(terrace,"joistLine double",direction,pos,run,true);
   }
 
-  if (showBoards) {
-    const acrossPx = direction === "l" ? terrace.clientHeight : terrace.clientWidth;
-    for (let i = 1; i < rowCount; i++) {
-      const p = (i / rowCount) * acrossPx;
-      const line = document.createElement("div");
-      line.className = "boardLine";
-      if (direction === "l") Object.assign(line.style,{left:"0",top:p+"px",width:"100%",height:"1px"});
-      else Object.assign(line.style,{top:"0",left:p+"px",height:"100%",width:"1px"});
-      terrace.appendChild(line);
-    }
+  if ($("showBoards").checked) renderBoardRows(terrace, model);
 
-    const seamSet = uniquePositions(rowSeams.flat());
-    for (const seam of seamSet) {
-      const w = terrace.clientWidth, h = terrace.clientHeight;
-      const p = seam / run * (direction === "l" ? w : h);
-      const line = document.createElement("div");
-      line.className = "seamLine";
-      if (direction === "l") Object.assign(line.style,{top:"0",left:p+"px",height:"100%",width:"2px"});
-      else Object.assign(line.style,{left:"0",top:p+"px",width:"100%",height:"2px"});
-      terrace.appendChild(line);
-    }
-  }
+  if ($("showPiles").checked && base === "ground") {
+    const w = terrace.clientWidth;
+    const h = terrace.clientHeight;
 
-  if (showPiles && base === "ground") {
-    const w = terrace.clientWidth, h = terrace.clientHeight;
     for (const beltPos of beltLayout.positions) {
       for (const pilePos of pileLayout.positions) {
         const dot = document.createElement("div");
@@ -217,7 +331,7 @@ function renderPlan(model) {
     }
   }
 
-  if (base === "ground" && showBelts && beltLayout.count > 1) {
+  if (base === "ground" && $("showBelts").checked && beltLayout.count > 1) {
     const label = document.createElement("div");
     label.className = "dimLabel";
     label.style.left = "8px";
@@ -226,13 +340,40 @@ function renderPlan(model) {
     terrace.appendChild(label);
   }
 
-  if (base === "ground" && showPiles && pileLayout.count > 1) {
+  if (base === "ground" && $("showPiles").checked && pileLayout.count > 1) {
     const label = document.createElement("div");
     label.className = "dimLabel";
     label.style.right = "8px";
     label.style.bottom = "8px";
     label.textContent = "сваи ≈ " + fmt(pileLayout.step) + " мм";
     terrace.appendChild(label);
+  }
+}
+
+function renderRowPlans(boardRows) {
+  const box = $("rowPlans");
+  box.innerHTML = "";
+
+  const maxShown = Math.min(boardRows.rows.length, 12);
+
+  for (let i = 0; i < maxShown; i++) {
+    const row = boardRows.rows[i];
+    const div = document.createElement("div");
+    div.className = "rowPlan";
+
+    const pieces = row.pieces.map(p =>
+      (p.reused ? "остаток " : "") + fmt(p.length) + " мм"
+    ).join(" + ");
+
+    div.innerHTML = "<span>Ряд " + (i+1) + "</span><b>" + pieces + "</b>";
+    box.appendChild(div);
+  }
+
+  if (boardRows.rows.length > maxShown) {
+    const div = document.createElement("div");
+    div.className = "rowPlan";
+    div.innerHTML = "<span>…</span><b>ещё " + (boardRows.rows.length-maxShown) + " рядов</b>";
+    box.appendChild(div);
   }
 }
 
@@ -258,12 +399,9 @@ function calculate() {
 
   const joistStep = joistStepByBoardHeight(boardHeight);
   const rowCount = Math.ceil(across / boardModule);
-  const plan = chooseBoardCombination(run);
+  const boardRows = buildBoardRows(run, rowCount);
 
-  const rowSeams = [];
-  for (let r = 0; r < rowCount; r++) rowSeams.push(seamPositions(plan.actual, run, r % 2 === 1));
-
-  const allSeams = uniquePositions(rowSeams.flat());
+  const allSeams = uniquePositions(boardRows.rows.flatMap(r => r.seams));
   const joists = buildJoists(run, allSeams, joistStep);
 
   const joistLengthM = across / 1000;
@@ -272,9 +410,8 @@ function calculate() {
   const totalJoistMeters = regularJoistMeters + seamJoistMeters;
   const joistBuy = stockPurchase(totalJoistMeters);
 
-  const boardsToBuy = rowCount * plan.combo.length;
-  const rawWaste = rowCount * plan.waste;
-  const totalSeams = rowSeams.reduce((sum, row) => sum + row.length, 0);
+  const totalBoards = Object.values(boardRows.purchases).reduce((a,b)=>a+b,0);
+  const totalSeams = boardRows.rows.reduce((sum,row)=>sum+row.seams.length,0);
 
   const beltAffected = hasHouse && houseAffectsAxis(direction, houseSide, "across");
   const beltLayout = beltAffected
@@ -292,13 +429,17 @@ function calculate() {
 
   const totalPiles = beltLayout.count * pileLayout.count;
 
-  $("area").textContent = fmt(L * W / 1e6, 2) + " м²";
+  $("area").textContent = fmt(L*W/1e6,2) + " м²";
   $("baseOut").textContent = baseNames[base];
   $("rows").textContent = rowCount + " шт.";
-  $("boardCount").textContent = boardsToBuy + " шт.";
-  $("boardPlan").textContent = plan.combo.map(x => x / 1000 + " м").join(" + ");
-  $("boardWaste").textContent = fmt(rawWaste / 1000, 2) + " м";
+  $("buy3000").textContent = boardRows.purchases[3000] + " шт.";
+  $("buy4000").textContent = boardRows.purchases[4000] + " шт.";
+  $("buy6000").textContent = boardRows.purchases[6000] + " шт.";
+  $("boardCount").textContent = totalBoards + " шт.";
+  $("reusedOffcuts").textContent = boardRows.reusedPieces + " шт.";
+  $("boardWaste").textContent = fmt(boardRows.finalWaste/1000,2) + " м";
   $("seams").textContent = totalSeams + " шт.";
+  renderRowPlans(boardRows);
 
   $("joistStepOut").textContent = joistStep + " мм";
   $("regularJoists").textContent = joists.regular.length + " шт. / " + fmt(regularJoistMeters,1) + " м.п.";
@@ -342,10 +483,14 @@ function calculate() {
       ? "Кровля / гидроизоляция: только регулируемые пластиковые опоры → металлический каркас → ДПК."
       : "Бетон: резиновые подкладки, арматурные штыри или регулируемые пластиковые опоры.";
 
-  updateViewSize(L, W);
+  updateViewSize(L,W);
 
-  lastModel = { run, across, direction, rowCount, rowSeams, joists, beltLayout, pileLayout, base };
-  setTimeout(() => renderPlan(lastModel), 0);
+  lastModel = {
+    run, across, direction, boardRows, joists,
+    beltLayout, pileLayout, base
+  };
+
+  setTimeout(()=>renderPlan(lastModel),0);
 }
 
 function updateControls() {
@@ -358,16 +503,16 @@ function updateControls() {
 ["L","W","dir","base","boardModule","boardHeight","hasHouse","houseSide"].forEach(id => {
   const el = $(id);
   if (el) {
-    el.addEventListener("input", () => { updateControls(); calculate(); });
-    el.addEventListener("change", () => { updateControls(); calculate(); });
+    el.addEventListener("input",()=>{updateControls();calculate();});
+    el.addEventListener("change",()=>{updateControls();calculate();});
   }
 });
 
 ["showBoards","showJoists","showBelts","showPiles"].forEach(id => {
-  $(id).addEventListener("change", () => { if (lastModel) renderPlan(lastModel); });
+  $(id).addEventListener("change",()=>{if(lastModel)renderPlan(lastModel);});
 });
 
-$("calc").addEventListener("click", calculate);
+$("calc").addEventListener("click",calculate);
 
 updateControls();
 calculate();
