@@ -22,13 +22,13 @@ const layoutHints = {
 
 let lastModel = null;
 let polygonPoints = [
-  {x:100,y:100},{x:720,y:100},{x:720,y:480},{x:100,y:480}
+  {x:0,y:0},{x:6200,y:0},{x:6200,y:3800},{x:0,y:3800}
 ];
 let polygonClosed = true;
 let drawingPolygon = false;
 let draggingVertex = -1;
-const FREE_MM_PER_UNIT = 10;
-const FREE_DRAW_VIEWBOX = {x:0,y:0,w:5000,h:3500}; // 50 × 35 м при масштабе 10 мм/ед.
+let polygonViewBoxLock = null;
+const FREE_DRAW_VIEWBOX = {x:0,y:0,w:50000,h:35000}; // 50 × 35 м, координаты в мм.
 
 function polygonArea(points){
   if(points.length<3) return 0;
@@ -60,14 +60,14 @@ function svgToMm(point,bounds,L,W){
 
 function getPolygonMetrics(){
   const b=polygonBounds(polygonPoints);
-  const unitsArea=polygonClosed?polygonArea(polygonPoints):0;
+  const areaMm2=polygonClosed?polygonArea(polygonPoints):0;
   const bw=Math.max(1,b.maxX-b.minX);
   const bh=Math.max(1,b.maxY-b.minY);
 
   return {
-    areaM2:(unitsArea*FREE_MM_PER_UNIT*FREE_MM_PER_UNIT)/1e6,
-    bboxL:bw*FREE_MM_PER_UNIT,
-    bboxW:bh*FREE_MM_PER_UNIT,
+    areaM2:areaMm2/1e6,
+    bboxL:bw,
+    bboxW:bh,
     bounds:b
   };
 }
@@ -84,26 +84,39 @@ function startDrawingPolygon(){
   polygonClosed=false;
   drawingPolygon=true;
   draggingVertex=-1;
+  polygonViewBoxLock=null;
+
+  const terrace=$("terrace");
+  const layer=$("constructionLayer");
+  terrace.style.width="650px";
+  terrace.style.height="430px";
+  layer.innerHTML="";
+  layer.style.clipPath="none";
+  layer.style.webkitClipPath="none";
+
   renderPolygonEditor();
-  calculate();
+  resetCanvasView();
 }
 
 function closePolygon(){
   if(polygonPoints.length<3) return;
   polygonClosed=true;
   drawingPolygon=false;
-  renderPolygonEditor();
+  polygonViewBoxLock=null;
   calculate();
+  setTimeout(fitCanvasView,40);
 }
 
 function resetPolygon(){
   polygonPoints=[
-    {x:100,y:100},{x:720,y:100},{x:720,y:480},{x:100,y:480}
+    {x:0,y:0},{x:6200,y:0},{x:6200,y:3800},{x:0,y:3800}
   ];
   polygonClosed=true;
   drawingPolygon=false;
-  renderPolygonEditor();
+  draggingVertex=-1;
+  polygonViewBoxLock=null;
   calculate();
+  setTimeout(fitCanvasView,40);
 }
 
 function polygonClipPath(){
@@ -135,6 +148,11 @@ function applyPolygonToTerrace(){
 }
 
 function updatePolygonEditorViewBox(svg){
+  if(polygonViewBoxLock){
+    svg.setAttribute("viewBox",polygonViewBoxLock);
+    return;
+  }
+
   if(drawingPolygon || polygonPoints.length<2){
     const v=FREE_DRAW_VIEWBOX;
     svg.setAttribute("viewBox",v.x+" "+v.y+" "+v.w+" "+v.h);
@@ -144,9 +162,6 @@ function updatePolygonEditorViewBox(svg){
   const b=polygonBounds(polygonPoints);
   const bw=Math.max(1,b.maxX-b.minX);
   const bh=Math.max(1,b.maxY-b.minY);
-
-  // После замыкания рабочая область автоматически подстраивается
-  // под реальный контур. Габарит больше не связан с L/W.
   svg.setAttribute("viewBox",b.minX+" "+b.minY+" "+bw+" "+bh);
 }
 
@@ -154,7 +169,7 @@ function renderPolygonEditor(){
   const svg=$("polygonEditor");
   if(!svg || $("shapeMode").value!=="free") return;
   updatePolygonEditorViewBox(svg);
-  applyPolygonToTerrace();
+  if(draggingVertex<0) applyPolygonToTerrace();
   svg.innerHTML="";
   svg.classList.toggle("drawing",drawingPolygon);
 
@@ -170,9 +185,10 @@ function renderPolygonEditor(){
   const metrics=getPolygonMetrics();
   const b=metrics.bounds;
   const visualSpan=Math.max(1,b.maxX-b.minX,b.maxY-b.minY);
-  const handleR=Math.max(8,visualSpan*0.018);
-  const addR=Math.max(7,visualSpan*0.013);
-  const labelOffset=Math.max(18,visualSpan*0.028);
+  const handleR=Math.max(80,visualSpan*0.018);
+  const addR=Math.max(65,visualSpan*0.013);
+  const labelOffset=Math.max(140,visualSpan*0.035);
+  const labelSize=Math.max(110,visualSpan*0.024);
   const edgeCount=polygonClosed?polygonPoints.length:Math.max(0,polygonPoints.length-1);
 
   for(let i=0;i<edgeCount;i++){
@@ -187,17 +203,17 @@ function renderPolygonEditor(){
       add.addEventListener("click",e=>{
         e.stopPropagation();
         polygonPoints.splice(i+1,0,{x:mx,y:my});
-        renderPolygonEditor();
         calculate();
       });
       svg.appendChild(add);
     }
 
     if(polygonClosed){
-      const length=Math.hypot(next.x-p.x,next.y-p.y)*FREE_MM_PER_UNIT;
+      const length=Math.hypot(next.x-p.x,next.y-p.y);
       const label=document.createElementNS(ns,"text");
       label.setAttribute("x",mx); label.setAttribute("y",my-labelOffset);
       label.setAttribute("text-anchor","middle");
+      label.setAttribute("font-size",String(labelSize));
       label.setAttribute("class","edgeLabel");
       label.textContent=fmt(length)+" мм";
       label.addEventListener("click",e=>{
@@ -230,6 +246,7 @@ function renderPolygonEditor(){
       c.addEventListener("pointerdown",e=>{
         e.preventDefault(); e.stopPropagation();
         draggingVertex=i;
+        polygonViewBoxLock=svg.getAttribute("viewBox");
         svg.setPointerCapture(e.pointerId);
       });
     }
@@ -260,12 +277,14 @@ function installPolygonPointerHandlers(){
       y:loc.y
     };
     renderPolygonEditor();
-    calculate();
   });
 
   const stop=e=>{
+    if(draggingVertex<0) return;
     draggingVertex=-1;
+    polygonViewBoxLock=null;
     try{if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);}catch(_){}
+    calculate();
   };
   svg.addEventListener("pointerup",stop);
   svg.addEventListener("pointercancel",stop);
@@ -616,10 +635,9 @@ function buildBoardRows(runLength,rowCount,mode,allowedLengths){
 function polygonScanlineSegments(axisValue,direction,L,W){
   if(!polygonClosed||polygonPoints.length<3) return [];
   const b=polygonBounds(polygonPoints);
-  const bw=Math.max(1,b.maxX-b.minX), bh=Math.max(1,b.maxY-b.minY);
   const scan = direction==="l"
-    ? b.minY + (axisValue/W)*bh
-    : b.minX + (axisValue/L)*bw;
+    ? b.minY + axisValue
+    : b.minX + axisValue;
 
   const hits=[];
   for(let i=0;i<polygonPoints.length;i++){
@@ -640,18 +658,12 @@ function polygonScanlineSegments(axisValue,direction,L,W){
 
   const segments=[];
   for(let i=0;i+1<hits.length;i+=2){
-    const startPx=hits[i],endPx=hits[i+1];
-    if(endPx-startPx<0.5) continue;
+    const start=hits[i],end=hits[i+1];
+    if(end-start<0.5) continue;
     if(direction==="l"){
-      segments.push({
-        start:(startPx-b.minX)/bw*L,
-        length:(endPx-startPx)/bw*L
-      });
+      segments.push({start:start-b.minX,length:end-start});
     }else{
-      segments.push({
-        start:(startPx-b.minY)/bh*W,
-        length:(endPx-startPx)/bh*W
-      });
+      segments.push({start:start-b.minY,length:end-start});
     }
   }
   return segments;
