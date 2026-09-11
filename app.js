@@ -9,14 +9,14 @@ const baseNames = {
 const layoutNames = {
   optimal: "Оптимальный раскрой",
   aligned: "Стыки в одну линию",
-  half: "Вразбежку 1/2",
+  half: "Шахматка 1/2",
   seamless: "Без стыков"
 };
 
 const layoutHints = {
   optimal: "Минимизация отходов с повторным использованием остатков.",
   aligned: "Все торцевые стыки располагаются на одинаковых осях.",
-  half: "Соседние ряды смещаются примерно на половину основной доски.",
+  half: "Чётные ряды: 1/2 + 1/2 пролёта. Нечётные: 1/4 + 1/2 + 1/4.",
   seamless: "Каждый ряд выполняется одной доской. Возможен только при длине ряда до 6000 мм."
 };
 
@@ -154,49 +154,75 @@ function buildRowsSeamless(runLength,rowCount){
   return {rows,purchases,reusedPieces:0,finalWaste:waste,offcuts:[],warning:""};
 }
 
-function buildRowsHalf(runLength,rowCount){
-  const base=chooseAlignedPattern(runLength);
+function packPiecesIntoStock(pieceLengths){
   const purchases={3000:0,4000:0,6000:0};
-  const rows=[];
-  let totalWaste=0;
+  const bins=[];
+  let reusedPieces=0;
 
-  const main=base.combo[0] || chooseStockForRemaining(runLength);
-  const shift=Math.floor(main/2);
+  const pieces=[...pieceLengths].sort((a,b)=>b-a);
 
-  for(let r=0;r<rowCount;r++){
-    if(r%2===0 || runLength<=shift){
-      base.combo.forEach(stock=>addPurchase(purchases,stock));
-      rows.push(makeRowFromLengths(base.actual));
-      totalWaste+=base.waste;
+  for(const piece of pieces){
+    let bestBin=-1;
+    let bestRemaining=Infinity;
+
+    for(let i=0;i<bins.length;i++){
+      if(bins[i].remaining>=piece){
+        const after=bins[i].remaining-piece;
+        if(after<bestRemaining){
+          bestRemaining=after;
+          bestBin=i;
+        }
+      }
+    }
+
+    if(bestBin>=0){
+      bins[bestBin].remaining-=piece;
+      reusedPieces++;
       continue;
     }
 
-    let remaining=runLength;
-    const actual=[];
-    const stocks=[];
-
-    const firstStock=chooseStockForRemaining(shift);
-    stocks.push(firstStock);
-    actual.push(Math.min(shift,remaining));
-    totalWaste+=firstStock-actual[0];
-    remaining-=actual[0];
-
-    while(remaining>0.5){
-      const stock=chooseStockForRemaining(remaining);
-      stocks.push(stock);
-      const used=Math.min(stock,remaining);
-      actual.push(used);
-      totalWaste+=stock-used;
-      remaining-=used;
-    }
-
-    stocks.forEach(stock=>addPurchase(purchases,stock));
-    rows.push(makeRowFromLengths(actual));
+    const stock=chooseStockForRemaining(piece);
+    addPurchase(purchases,stock);
+    bins.push({stock,remaining:stock-piece});
   }
 
+  const offcuts=bins.map(b=>b.remaining).filter(x=>x>0.5).sort((a,b)=>b-a);
+
   return {
-    rows,purchases,reusedPieces:0,finalWaste:totalWaste,offcuts:[],
-    warning:"Режим 1/2 сейчас строит чередующиеся ряды со смещением примерно на половину первой доски."
+    purchases,
+    reusedPieces,
+    finalWaste:offcuts.reduce((a,b)=>a+b,0),
+    offcuts
+  };
+}
+
+function buildRowsHalf(runLength,rowCount){
+  const rows=[];
+  const allPieceLengths=[];
+
+  const half=runLength/2;
+  const quarter=runLength/4;
+
+  for(let r=0;r<rowCount;r++){
+    const lengths = r%2===0
+      ? [half, half]
+      : [quarter, half, quarter];
+
+    rows.push(makeRowFromLengths(lengths));
+    allPieceLengths.push(...lengths);
+  }
+
+  // Закупку под геометрическую шахматку считаем отдельно:
+  // детали упаковываются в доступные доски 3/4/6 м с повторным использованием остатков.
+  const packed=packPiecesIntoStock(allPieceLengths);
+
+  return {
+    rows,
+    purchases:packed.purchases,
+    reusedPieces:packed.reusedPieces,
+    finalWaste:packed.finalWaste,
+    offcuts:packed.offcuts,
+    warning:"Шахматка: ряд A = 1/2 + 1/2; ряд B = 1/4 + 1/2 + 1/4."
   };
 }
 
@@ -390,24 +416,6 @@ function renderBoardRows(terrace,model){
       terrace.appendChild(el);
       cursor+=piece.length;
 
-      if(pieceIndex<row.pieces.length-1){
-        const seam=document.createElement("div");
-        seam.className="seamMark";
-
-        if(direction==="l"){
-          Object.assign(seam.style,{
-            left:(cursor/run*w)+"px",top:(rowStart*h)+"px",
-            width:"2px",height:Math.max(2,(rowEnd-rowStart)*h)+"px"
-          });
-        }else{
-          Object.assign(seam.style,{
-            top:(cursor/run*h)+"px",left:(rowStart*w)+"px",
-            height:"2px",width:Math.max(2,(rowEnd-rowStart)*w)+"px"
-          });
-        }
-
-        terrace.appendChild(seam);
-      }
     });
   });
 }
