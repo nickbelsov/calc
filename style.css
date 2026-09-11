@@ -435,3 +435,21 @@ main,.workspace,.canvasWrap,.canvasViewport{
   stroke:#fff;
   stroke-width:7px;
 }
+
+/* Readable dimension labels */
+.edgeLabelBg{
+  fill:rgba(255,255,255,.96);
+  stroke:#dfe3e5;
+  stroke-width:1.5;
+  vector-effect:non-scaling-stroke;
+  pointer-events:none;
+}
+.edgeLabel{
+  fill:#15191b;
+  stroke:#fff;
+  stroke-width:3px;
+  vector-effect:non-scaling-stroke;
+  font-family:Inter,Arial,sans-serif;
+  font-weight:600;
+  letter-spacing:.01em;
+}
