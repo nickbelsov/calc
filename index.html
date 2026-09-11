@@ -7,11 +7,14 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><b>NIMTECH</b><span>Прототип планировщика террасы</span></header>
+<header class="appHeader">
+  <div class="brand"><a href="https://nimtech.ru/" target="_blank" rel="noopener">NIMTECH</a><span>Планировщик террасы</span></div>
+  <div class="headerMeta"><span class="statusDot"></span><span>Проект сохраняется в браузере</span></div>
+</header>
 
 <main>
-<aside>
-  <h2>Проект</h2>
+<aside class="settingsPanel">
+  <div class="panelHead"><span class="eyebrow">ПРОЕКТИРОВАНИЕ</span><h2>Параметры террасы</h2></div>
 
   <label>Форма площадки</label>
   <select id="shapeMode">
@@ -103,7 +106,11 @@
   <button id="calc">Рассчитать</button>
 </aside>
 
-<section>
+<section class="workspace">
+  <div class="workspaceTop">
+    <div><span class="eyebrow">РАБОЧАЯ ОБЛАСТЬ</span><strong>План террасы</strong></div>
+    <div class="workspaceBadge">мм</div>
+  </div>
   <div class="canvasWrap">
     <div class="layerControls">
       <label><input id="showBoards" type="checkbox" checked> ДПК</label>
@@ -127,7 +134,7 @@
 </section>
 
 <aside class="result">
-  <h2>Расчёт</h2>
+  <div class="panelHead"><span class="eyebrow">СПЕЦИФИКАЦИЯ</span><h2>Расчёт проекта</h2></div>
   <p>Площадь <b id="area"></b></p>
   <p>Габарит контура <b id="bboxOut">—</b></p>
   <p>Основание <b id="baseOut"></b></p>
