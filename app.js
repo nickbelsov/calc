@@ -109,6 +109,26 @@ function renderPolygonEditor(){
     label.setAttribute("text-anchor","middle");
     label.setAttribute("class","edgeLabel");
     label.textContent=fmt(length)+" мм";
+    label.addEventListener("click",e=>{
+      e.stopPropagation();
+      const raw=window.prompt("Длина ребра, мм", String(Math.round(length)));
+      if(raw===null) return;
+      const desired=Number(String(raw).replace(",","."));
+      if(!Number.isFinite(desired) || desired<=0) return;
+
+      const current=Math.max(1,length);
+      const scale=desired/current;
+
+      const dx=next.x-p.x;
+      const dy=next.y-p.y;
+      polygonPoints[(i+1)%polygonPoints.length]={
+        x:Math.max(20,Math.min(980,p.x+dx*scale)),
+        y:Math.max(20,Math.min(680,p.y+dy*scale))
+      };
+
+      renderPolygonEditor();
+      calculate();
+    });
     svg.appendChild(label);
 
     const c=document.createElementNS(ns,"circle");
@@ -116,23 +136,11 @@ function renderPolygonEditor(){
     c.setAttribute("class","vertexHandle");
     c.dataset.vertex=i;
     c.addEventListener("pointerdown",e=>{
+      e.preventDefault();
       draggingVertex=i;
-      c.setPointerCapture(e.pointerId);
+      svg.setPointerCapture(e.pointerId);
     });
-    c.addEventListener("pointermove",e=>{
-      if(draggingVertex!==i) return;
-      const pt=svg.createSVGPoint();
-      pt.x=e.clientX; pt.y=e.clientY;
-      const loc=pt.matrixTransform(svg.getScreenCTM().inverse());
-      polygonPoints[i]={
-        x:Math.max(20,Math.min(980,loc.x)),
-        y:Math.max(20,Math.min(680,loc.y))
-      };
-      renderPolygonEditor();
-      calculate();
-    });
-    c.addEventListener("pointerup",()=>{draggingVertex=-1;});
-    c.addEventListener("pointercancel",()=>{draggingVertex=-1;});
+
     svg.appendChild(c);
   });
 }
@@ -143,6 +151,38 @@ function resetPolygon(){
   ];
   renderPolygonEditor();
   calculate();
+}
+
+function installPolygonPointerHandlers(){
+  const svg=$("polygonEditor");
+  if(!svg || svg.dataset.handlersInstalled) return;
+  svg.dataset.handlersInstalled="1";
+
+  svg.addEventListener("pointermove",e=>{
+    if(draggingVertex<0) return;
+    const pt=svg.createSVGPoint();
+    pt.x=e.clientX;
+    pt.y=e.clientY;
+    const ctm=svg.getScreenCTM();
+    if(!ctm) return;
+    const loc=pt.matrixTransform(ctm.inverse());
+
+    polygonPoints[draggingVertex]={
+      x:Math.max(20,Math.min(980,loc.x)),
+      y:Math.max(20,Math.min(680,loc.y))
+    };
+
+    renderPolygonEditor();
+    calculate();
+  });
+
+  const stop=e=>{
+    draggingVertex=-1;
+    try{ if(svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId); }catch(_){}
+  };
+
+  svg.addEventListener("pointerup",stop);
+  svg.addEventListener("pointercancel",stop);
 }
 
 function getAllowedBoardLengths(){
@@ -575,24 +615,25 @@ function renderBoardRows(terrace,model){
 
 function renderPlan(model){
   const terrace=$("terrace");
-  terrace.innerHTML="";
+  const layer=$("constructionLayer");
+  layer.innerHTML="";
 
   const {run,across,direction,joists,beltLayout,pileLayout,base}=model;
 
   if($("showBelts").checked){
-    for(const pos of beltLayout.positions) addLine(terrace,"beltLine",direction,pos,across,false);
+    for(const pos of beltLayout.positions) addLine(layer,"beltLine",direction,pos,across,false);
   }
 
   if($("showJoists").checked){
-    for(const pos of joists.regular) addLine(terrace,"joistLine",direction,pos,run,true);
-    for(const pos of joists.seam) addLine(terrace,"joistLine double",direction,pos,run,true);
+    for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
+    for(const pos of joists.seam) addLine(layer,"joistLine",direction,pos,run,true);
   }
 
-  if($("showBoards").checked) renderBoardRows(terrace,model);
+  if($("showBoards").checked) renderBoardRows(layer,model);
 
   if($("showPiles").checked && base==="ground"){
-    const w=terrace.clientWidth;
-    const h=terrace.clientHeight;
+    const w=layer.clientWidth;
+    const h=layer.clientHeight;
 
     for(const beltPos of beltLayout.positions){
       for(const pilePos of pileLayout.positions){
@@ -607,7 +648,7 @@ function renderPlan(model){
           dot.style.top=(pilePos/run*h)+"px";
         }
 
-        terrace.appendChild(dot);
+        layer.appendChild(dot);
       }
     }
   }
@@ -650,6 +691,7 @@ function updateViewSize(L,W){
 function calculate(){
   const L=+$("L").value||6200;
   const W=+$("W").value||3800;
+  const shapeMode=$("shapeMode").value;
   const direction=$("dir").value;
   const layoutMode=$("layoutMode").value;
   const base=$("base").value;
@@ -765,7 +807,10 @@ function calculate(){
   updateViewSize(L,W);
 
   lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode};
-  setTimeout(()=>renderPlan(lastModel),0);
+  setTimeout(()=>{
+    renderPlan(lastModel);
+    if(shapeMode==="free") renderPolygonEditor();
+  },0);
 }
 
 function updateControls(){
@@ -801,5 +846,6 @@ function updateControls(){
 $("resetPolygon")?.addEventListener("click",resetPolygon);
 $("calc").addEventListener("click",calculate);
 
+installPolygonPointerHandlers();
 updateControls();
 calculate();
