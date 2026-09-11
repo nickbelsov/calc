@@ -639,29 +639,70 @@ function buildPolygonBoardRows(L,W,direction,boardModule,mode,allowedLengths){
   return {rows,purchases,reusedPieces,finalWaste,offcuts,warning,polygon:true};
 }
 
-function getMasterPolygonSeams(boardRows){
-  if(!boardRows?.polygon) return [];
+function getLongestPolygonSegment(boardRows){
+  if(!boardRows?.polygon) return null;
   let best=null;
 
   for(const row of boardRows.rows){
     for(const seg of row.segments||[]){
-      if(!best || seg.length>best.length) best=seg;
+      if(!best || seg.length>best.length){
+        best={
+          start:seg.start,
+          length:seg.length
+        };
+      }
     }
   }
 
-  if(!best) return [];
-
-  return (best.seams||[]).map(s=>best.start+s);
+  return best;
 }
 
-function applyMasterSeamsToPolygonRows(boardRows, masterSeams){
-  if(!boardRows?.polygon || !masterSeams.length) return boardRows;
+function getPolygonSeamPatterns(boardRows, mode){
+  const master=getLongestPolygonSegment(boardRows);
+  if(!master) return {even:[],odd:[],all:[]};
 
+  const start=master.start;
+  const len=master.length;
+
+  if(mode==="half"){
+    // Равномерная шахматка:
+    // чётные ряды: 1/2 + 1/2
+    // нечётные: 1/4 + 1/2 + 1/4
+    const even=[start+len/2];
+    const odd=[start+len/4,start+3*len/4];
+
+    return {
+      even,
+      odd,
+      all:uniquePositions([...even,...odd])
+    };
+  }
+
+  // Для остальных режимов пока сохраняем единую систему осей
+  // по самому длинному ряду.
+  let bestRowSegment=null;
   for(const row of boardRows.rows){
+    for(const seg of row.segments||[]){
+      if(!bestRowSegment || seg.length>bestRowSegment.length) bestRowSegment=seg;
+    }
+  }
+
+  const common=bestRowSegment
+    ? (bestRowSegment.seams||[]).map(x=>bestRowSegment.start+x)
+    : [];
+
+  return {even:common,odd:common,all:uniquePositions(common)};
+}
+
+function applyPolygonSeamPatterns(boardRows, patterns){
+  if(!boardRows?.polygon) return boardRows;
+
+  boardRows.rows.forEach((row,rowIndex)=>{
+    const axes=(rowIndex%2===0 ? patterns.even : patterns.odd) || [];
     const nextSegments=[];
 
     for(const seg of row.segments||[]){
-      const inside=masterSeams
+      const inside=axes
         .filter(x=>x>seg.start+1 && x<seg.start+seg.length-1)
         .sort((a,b)=>a-b);
 
@@ -686,9 +727,9 @@ function applyMasterSeamsToPolygonRows(boardRows, masterSeams){
     row.segments=nextSegments;
     row.seams=[];
     for(const seg of nextSegments){
-      for(const s of seg.seams) row.seams.push(seg.start+s);
+      for(const seam of seg.seams) row.seams.push(seg.start+seam);
     }
-  }
+  });
 
   return boardRows;
 }
@@ -932,13 +973,13 @@ function calculate(){
     ? buildPolygonBoardRows(L,W,direction,boardModule,layoutMode,allowedLengths)
     : buildBoardRows(run,rowCount,layoutMode,allowedLengths);
 
-  let masterSeams=[];
+  let seamPatterns={even:[],odd:[],all:[]};
   let allSeams=[];
 
   if(shapeMode==="free" && boardRows.polygon){
-    masterSeams=getMasterPolygonSeams(boardRows);
-    boardRows=applyMasterSeamsToPolygonRows(boardRows,masterSeams);
-    allSeams=masterSeams;
+    seamPatterns=getPolygonSeamPatterns(boardRows,layoutMode);
+    boardRows=applyPolygonSeamPatterns(boardRows,seamPatterns);
+    allSeams=seamPatterns.all;
   }else{
     allSeams=uniquePositions((boardRows.rows||[]).flatMap(r=>r.seams));
   }
@@ -983,7 +1024,9 @@ function calculate(){
   const freeWarning = shapeMode==="free" && !polygonClosed
     ? "Замкните контур кликом по первой точке — после этого начнётся расчёт раскладки внутри формы."
     : shapeMode==="free"
-      ? "Для произвольной формы оси стыков берутся по самому длинному непрерывному ряду и протягиваются через всю площадку. Дополнительный профиль 40×40×2 под локальные стыки не добавляется. Пояс 80×80 и сваи пока считаются по габариту."
+      ? (layoutMode==="half"
+          ? "Шахматка привязана к самому длинному непрерывному ряду: чётные ряды имеют один шов по центру, нечётные — швы на 1/4 и 3/4. Эти три оси профиля 40×40×2 проходят через всю площадку и больше нигде не размножаются."
+          : "Для произвольной формы оси стыков берутся по самому длинному непрерывному ряду и протягиваются через всю площадку. Локальные стыки не создают новые оси профиля 40×40×2.")
       : "";
   warning.textContent=[boardRows.warning,freeWarning].filter(Boolean).join(" ");
   warning.classList.toggle("hidden",!warning.textContent);
@@ -1042,7 +1085,7 @@ function calculate(){
 
   updateViewSize(L,W);
 
-  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,masterSeams};
+  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns};
   setTimeout(()=>{
     renderPlan(lastModel);
     if(shapeMode==="free") renderPolygonEditor();
