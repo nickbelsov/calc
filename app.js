@@ -27,6 +27,7 @@ let polygonPoints = [
 let polygonClosed = true;
 let drawingPolygon = false;
 let draggingVertex = -1;
+const FREE_MM_PER_UNIT = 10;
 
 function polygonArea(points){
   if(points.length<3) return 0;
@@ -57,15 +58,16 @@ function svgToMm(point,bounds,L,W){
 }
 
 function getPolygonMetrics(){
-  const L=+$("L").value||6200;
-  const W=+$("W").value||3800;
   const b=polygonBounds(polygonPoints);
-  const pxArea=polygonClosed?polygonArea(polygonPoints):0;
+  const unitsArea=polygonClosed?polygonArea(polygonPoints):0;
   const bw=Math.max(1,b.maxX-b.minX);
   const bh=Math.max(1,b.maxY-b.minY);
+
   return {
-    areaM2:(pxArea/(bw*bh))*(L*W)/1e6,
-    bboxL:L,bboxW:W,bounds:b
+    areaM2:(unitsArea*FREE_MM_PER_UNIT*FREE_MM_PER_UNIT)/1e6,
+    bboxL:bw*FREE_MM_PER_UNIT,
+    bboxW:bh*FREE_MM_PER_UNIT,
+    bounds:b
   };
 }
 
@@ -105,8 +107,12 @@ function resetPolygon(){
 
 function polygonClipPath(){
   if(!polygonClosed || polygonPoints.length<3) return "none";
+  const b=polygonBounds(polygonPoints);
+  const bw=Math.max(1,b.maxX-b.minX);
+  const bh=Math.max(1,b.maxY-b.minY);
   return "polygon(" + polygonPoints.map(p=>
-    (p.x/10).toFixed(3)+"% "+(p.y/7).toFixed(3)+"%"
+    (((p.x-b.minX)/bw)*100).toFixed(3)+"% "+
+    (((p.y-b.minY)/bh)*100).toFixed(3)+"%"
   ).join(",") + ")";
 }
 
@@ -166,9 +172,7 @@ function renderPolygonEditor(){
     }
 
     if(polygonClosed){
-      const m1=svgToMm(p,b,metrics.bboxL,metrics.bboxW);
-      const m2=svgToMm(next,b,metrics.bboxL,metrics.bboxW);
-      const length=Math.hypot(m2.x-m1.x,m2.y-m1.y);
+      const length=Math.hypot(next.x-p.x,next.y-p.y)*FREE_MM_PER_UNIT;
       const label=document.createElementNS(ns,"text");
       label.setAttribute("x",mx); label.setAttribute("y",my-20);
       label.setAttribute("text-anchor","middle");
@@ -183,8 +187,8 @@ function renderPolygonEditor(){
         const scale=desired/Math.max(1,length);
         const dx=next.x-p.x,dy=next.y-p.y;
         polygonPoints[(i+1)%polygonPoints.length]={
-          x:Math.max(20,Math.min(980,p.x+dx*scale)),
-          y:Math.max(20,Math.min(680,p.y+dy*scale))
+          x:p.x+dx*scale,
+          y:p.y+dy*scale
         };
         renderPolygonEditor();
         calculate();
@@ -220,8 +224,8 @@ function installPolygonPointerHandlers(){
     if(!drawingPolygon || e.target.classList.contains("vertexHandle")) return;
     const loc=eventToSvg(svg,e);
     polygonPoints.push({
-      x:Math.max(20,Math.min(980,loc.x)),
-      y:Math.max(20,Math.min(680,loc.y))
+      x:loc.x,
+      y:loc.y
     });
     renderPolygonEditor();
   });
@@ -230,8 +234,8 @@ function installPolygonPointerHandlers(){
     if(draggingVertex<0) return;
     const loc=eventToSvg(svg,e);
     polygonPoints[draggingVertex]={
-      x:Math.max(20,Math.min(980,loc.x)),
-      y:Math.max(20,Math.min(680,loc.y))
+      x:loc.x,
+      y:loc.y
     };
     renderPolygonEditor();
     calculate();
@@ -1177,9 +1181,10 @@ function updateViewSize(L,W){
 }
 
 function calculate(){
-  const L=+$("L").value||6200;
-  const W=+$("W").value||3800;
   const shapeMode=$("shapeMode").value;
+  const freeMetrics=shapeMode==="free" ? getPolygonMetrics() : null;
+  const L=shapeMode==="free" ? freeMetrics.bboxL : (+$("L").value||6200);
+  const W=shapeMode==="free" ? freeMetrics.bboxW : (+$("W").value||3800);
   const direction=$("dir").value;
   const layoutMode=$("layoutMode").value;
   const base=$("base").value;
@@ -1252,7 +1257,7 @@ function calculate(){
 
   const beltBuy=stockPurchase(beltMeters);
 
-  const shapeMetrics = shapeMode==="free" ? getPolygonMetrics() : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
+  const shapeMetrics = shapeMode==="free" ? freeMetrics : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
   $("area").textContent=fmt(shapeMetrics.areaM2,2)+" м²";
   $("bboxOut").textContent=fmt(shapeMetrics.bboxL)+" × "+fmt(shapeMetrics.bboxW)+" мм";
   $("baseOut").textContent=baseNames[base];
@@ -1548,9 +1553,12 @@ function notify3D(){
 
 
 window.getNimtech3DModel=()=>lastModel;
-window.getNimtechProjectInputs=()=>({
-  L:+$("L").value||6200,
-  W:+$("W").value||3800,
+window.getNimtechProjectInputs=()=>{
+  const free=$("shapeMode").value==="free";
+  const m=free?getPolygonMetrics():null;
+  return {
+  L:free?m.bboxL:(+$("L").value||6200),
+  W:free?m.bboxW:(+$("W").value||3800),
   boardModule:+$("boardModule").value||150,
   boardHeight:+$("boardHeight").value||23,
   direction:$("dir").value,
@@ -1558,5 +1566,6 @@ window.getNimtechProjectInputs=()=>({
   base:$("base").value,
   polygonPoints:polygonPoints.map(p=>({...p})),
   polygonClosed
-});
+  };
+};
 $("canvasViewport")?.addEventListener("contextmenu",e=>e.preventDefault());
