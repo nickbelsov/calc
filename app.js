@@ -103,9 +103,34 @@ function resetPolygon(){
   calculate();
 }
 
+function polygonClipPath(){
+  if(!polygonClosed || polygonPoints.length<3) return "none";
+  return "polygon(" + polygonPoints.map(p=>
+    (p.x/10).toFixed(3)+"% "+(p.y/7).toFixed(3)+"%"
+  ).join(",") + ")";
+}
+
+function applyPolygonToTerrace(){
+  const terrace=$("terrace");
+  const layer=$("constructionLayer");
+  const free=$("shapeMode").value==="free";
+
+  terrace.classList.toggle("freeShape",free);
+
+  if(free && polygonClosed && polygonPoints.length>=3){
+    const clip=polygonClipPath();
+    layer.style.clipPath=clip;
+    layer.style.webkitClipPath=clip;
+  }else{
+    layer.style.clipPath="none";
+    layer.style.webkitClipPath="none";
+  }
+}
+
 function renderPolygonEditor(){
   const svg=$("polygonEditor");
   if(!svg || $("shapeMode").value!=="free") return;
+  applyPolygonToTerrace();
   svg.innerHTML="";
   svg.classList.toggle("drawing",drawingPolygon);
 
@@ -749,8 +774,14 @@ function renderPlan(model){
   const terrace=$("terrace");
   const layer=$("constructionLayer");
   layer.innerHTML="";
+  applyPolygonToTerrace();
 
   const {run,across,direction,joists,beltLayout,pileLayout,base}=model;
+
+  if(model.shapeMode==="free" && (!polygonClosed || polygonPoints.length<3)){
+    layer.innerHTML="";
+    return;
+  }
 
   if($("showBelts").checked){
     for(const pos of beltLayout.positions) addLine(layer,"beltLine",direction,pos,across,false);
@@ -965,6 +996,7 @@ function updateControls(){
   $("rectControls").classList.toggle("hidden",false);
   $("freeControls").classList.toggle("hidden",!free);
   $("polygonEditor").classList.toggle("hidden",!free);
+  applyPolygonToTerrace();
   if(free) setTimeout(renderPolygonEditor,0);
   const allowed=getAllowedBoardLengths();
   $("layoutHint").textContent=allowed.length
