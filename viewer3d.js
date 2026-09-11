@@ -62,6 +62,47 @@ function box(w,h,d,color,x,y,z){
   mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);return mesh;
 }
 
+function polygonMmPoints(inp){
+  const pts=inp.polygonPoints||[];
+  if(pts.length<3) return [];
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+  const bw=Math.max(1,maxX-minX),bh=Math.max(1,maxY-minY);
+  return pts.map(p=>({
+    x:(p.x-minX)/bw*inp.L,
+    z:(p.y-minY)/bh*inp.W
+  }));
+}
+
+function polygonCrossSegments(inp,axisValue,dir){
+  const pts=polygonMmPoints(inp);
+  if(pts.length<3) return [];
+  const hits=[];
+
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i],b=pts[(i+1)%pts.length];
+
+    if(dir==='l'){
+      if((a.x<=axisValue&&b.x>axisValue)||(b.x<=axisValue&&a.x>axisValue)){
+        const t=(axisValue-a.x)/(b.x-a.x);
+        hits.push(a.z+t*(b.z-a.z));
+      }
+    }else{
+      if((a.z<=axisValue&&b.z>axisValue)||(b.z<=axisValue&&a.z>axisValue)){
+        const t=(axisValue-a.z)/(b.z-a.z);
+        hits.push(a.x+t*(b.x-a.x));
+      }
+    }
+  }
+
+  hits.sort((a,b)=>a-b);
+  const segs=[];
+  for(let i=0;i+1<hits.length;i+=2){
+    if(hits[i+1]-hits[i]>1) segs.push({start:hits[i],length:hits[i+1]-hits[i]});
+  }
+  return segs;
+}
+
 function rebuild(){
   if(!renderer) return;
   const model=window.getNimtech3DModel?.();
@@ -74,6 +115,23 @@ function rebuild(){
   const boardY=.18+joistH+beltH+boardH/2,joistY=.18+beltH+joistH/2,beltY=.18+beltH/2;
   const boardMat=0xb38359,joistMat=0x44494d,beltMat=0x8b684b,pileMat=0x6c7175;
   const dir=model.direction;
+
+  if(inp.shapeMode==='free' && inp.polygonClosed){
+    const pts=polygonMmPoints(inp);
+    if(pts.length>=3){
+      const shape=new THREE.Shape();
+      shape.moveTo(-sx/2+pts[0].x/1000,-sz/2+pts[0].z/1000);
+      for(let i=1;i<pts.length;i++) shape.lineTo(-sx/2+pts[i].x/1000,-sz/2+pts[i].z/1000);
+      shape.closePath();
+      const geo=new THREE.ShapeGeometry(shape);
+      const mat=new THREE.MeshStandardMaterial({color:0xd8c4af,roughness:.95,metalness:0,side:THREE.DoubleSide});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.rotation.x=-Math.PI/2;
+      mesh.position.y=boardY-boardH/2-.004;
+      mesh.receiveShadow=true;
+      modelGroup.add(mesh);
+    }
+  }
 
   if(model.boardRows?.rows){
     const rowCount=model.boardRows.rows.length||1;
@@ -92,10 +150,23 @@ function rebuild(){
     });
   }
 
-  const jlen=model.across/1000;
-  [...(model.joists?.regular||[]),...(model.joists?.seam||[])].forEach(pos=>{
-    if(dir==='l') box(.04,joistH,jlen,joistMat,-sx/2+pos/1000,joistY,0);
-    else box(jlen,joistH,.04,joistMat,0,joistY,-sz/2+pos/1000);
+  const allJoists=[...(model.joists?.regular||[]),...(model.joists?.seam||[])];
+  allJoists.forEach(pos=>{
+    if(inp.shapeMode==='free' && inp.polygonClosed){
+      const segs=polygonCrossSegments(inp,pos,dir);
+      segs.forEach(seg=>{
+        const len=seg.length/1000;
+        if(dir==='l'){
+          box(.04,joistH,len,joistMat,-sx/2+pos/1000,joistY,-sz/2+seg.start/1000+len/2);
+        }else{
+          box(len,joistH,.04,joistMat,-sx/2+seg.start/1000+len/2,joistY,-sz/2+pos/1000);
+        }
+      });
+    }else{
+      const jlen=model.across/1000;
+      if(dir==='l') box(.04,joistH,jlen,joistMat,-sx/2+pos/1000,joistY,0);
+      else box(jlen,joistH,.04,joistMat,0,joistY,-sz/2+pos/1000);
+    }
   });
 
   if(model.polygonStructure){
