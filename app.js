@@ -1197,9 +1197,15 @@ function renderRowPlans(boardRows){
 
 function updateViewSize(L,W){
   const t=$("terrace");
-  const scale=Math.min(650/L,430/W);
-  t.style.width=Math.max(300,L*scale)+"px";
-  t.style.height=Math.max(220,W*scale)+"px";
+  if(!t) return;
+
+  const safeL=Math.max(1,L);
+  const safeW=Math.max(1,W);
+  const scale=Math.min(650/safeL,430/safeW);
+
+  // Не искажаем пропорции даже у очень длинных / узких контуров.
+  t.style.width=Math.max(24,safeL*scale)+"px";
+  t.style.height=Math.max(24,safeW*scale)+"px";
 }
 
 function calculate(){
@@ -1385,6 +1391,7 @@ function calculate(){
   setTimeout(()=>{
     renderPlan(lastModel);
     if(shapeMode==="free") renderPolygonEditor();
+    updateWorldGrid();
     notify3D();
   },0);
 }
@@ -1466,12 +1473,50 @@ let isPanning=false;
 let panStart={x:0,y:0,vx:0,vy:0};
 let spaceDown=false;
 
+function updateWorldGrid(){
+  const vp=$("canvasViewport");
+  const terrace=$("terrace");
+  if(!vp||!terrace||!lastModel) return;
+
+  const direction=lastModel.direction;
+  const projectL=direction==="l" ? lastModel.run : lastModel.across;
+  const projectW=direction==="l" ? lastModel.across : lastModel.run;
+
+  if(!projectL||!projectW) return;
+
+  // Мелкая сетка 500 мм, крупная — 1000 мм.
+  const pxPerMmX=terrace.offsetWidth/projectL;
+  const pxPerMmY=terrace.offsetHeight/projectW;
+
+  let minorX=500*pxPerMmX*viewScale;
+  let minorY=500*pxPerMmY*viewScale;
+  let majorX=1000*pxPerMmX*viewScale;
+  let majorY=1000*pxPerMmY*viewScale;
+
+  // Не даём сетке превратиться в серую заливку при сильном уменьшении.
+  while(minorX<8 || minorY<8){
+    minorX*=2; minorY*=2; majorX*=2; majorY*=2;
+  }
+
+  const rect=vp.getBoundingClientRect();
+  const cx=rect.width/2+viewX;
+  const cy=rect.height/2+viewY;
+
+  vp.style.setProperty("--grid-minor-x",minorX+"px");
+  vp.style.setProperty("--grid-minor-y",minorY+"px");
+  vp.style.setProperty("--grid-major-x",majorX+"px");
+  vp.style.setProperty("--grid-major-y",majorY+"px");
+  vp.style.setProperty("--grid-origin-x",cx+"px");
+  vp.style.setProperty("--grid-origin-y",cy+"px");
+}
+
 function applyCanvasTransform(){
   const scene=$("canvasScene");
   if(!scene) return;
   scene.style.transform="translate("+viewX+"px,"+viewY+"px) scale("+viewScale+")";
   const zr=$("zoomReset");
   if(zr) zr.textContent=Math.round(viewScale*100)+"%";
+  updateWorldGrid();
 }
 
 function resetCanvasView(){
