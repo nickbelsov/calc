@@ -25,6 +25,23 @@ function joistStepByBoardHeight(height) {
     : CONFIG.joist.stepByBoardHeight.thickStep;
 }
 
+function equalLayout(length, maxSpacing) {
+  const intervals = Math.max(1, Math.ceil(length / maxSpacing));
+  const step = length / intervals;
+  const positions = [];
+
+  for (let i = 0; i <= intervals; i++) {
+    positions.push(i * step);
+  }
+
+  return {
+    intervals,
+    count: intervals + 1,
+    step,
+    positions
+  };
+}
+
 function chooseBoardCombination(runLength) {
   const lengths = CONFIG.boardLengths;
   const maxPieces = Math.ceil(runLength / Math.min(...lengths)) + 2;
@@ -122,25 +139,6 @@ function buildJoists(run, allSeams, maxStep) {
   };
 }
 
-function pileLayout(run) {
-  const minS = CONFIG.ground.pileSpacingMin;
-  const maxS = CONFIG.ground.pileSpacingMax;
-  const minEdge = CONFIG.ground.minEdge;
-
-  for (let count = 2; count < 100; count++) {
-    const module = run / count;
-    const edge = module / 2;
-
-    if (module >= minS && module <= maxS && edge >= minEdge) {
-      const positions = [];
-      for (let i = 0; i < count; i++) positions.push(edge + i * module);
-      return { count, module, edge, positions };
-    }
-  }
-
-  return { count: 0, module: 0, edge: 0, positions: [] };
-}
-
 function renderPlan(model) {
   const terrace = $("terrace");
   terrace.innerHTML = "";
@@ -205,7 +203,7 @@ function updateViewSize(L, W) {
 
 function technologyText(base) {
   if (base === "ground") {
-    return "Расчёт сверху вниз: ДПК → лаги 40×40×2 → опорный пояс 80×80×2 → винтовые сваи 2500 мм. Металл закупается хлыстами по 6 м.";
+    return "ДПК → лаги 40×40×2 → пояс 80×80×2 → сваи 2500 мм. Пояса и сваи распределяются равномерно с шагом не более 1500 мм. Металл закупается хлыстами по 6 м.";
   }
 
   if (base === "roof") {
@@ -248,6 +246,18 @@ function calculate() {
   const rawWaste = rowCount * plan.waste;
   const totalSeams = rowSeams.reduce((sum, row) => sum + row.length, 0);
 
+  // Пояс 80×80 идёт перпендикулярно лагам.
+  // Поэтому ряды пояса распределяются по длине лаги (across).
+  const beltLayout = equalLayout(across, CONFIG.belt.maxSpacing);
+  const beltLengthM = run / 1000;
+  const beltMeters = beltLayout.count * beltLengthM;
+  const beltBuy = stockPurchase(beltMeters);
+
+  // Сваи стоят непосредственно под каждым поясом и
+  // равномерно распределяются по всей длине пояса.
+  const pileLayout = equalLayout(run, CONFIG.ground.pileSpacingMax);
+  const totalPiles = beltLayout.count * pileLayout.count;
+
   $("area").textContent = fmt(L * W / 1e6, 2) + " м²";
   $("baseOut").textContent = baseNames[base];
   $("rows").textContent = fmt(rowCount) + " шт.";
@@ -265,29 +275,31 @@ function calculate() {
   $("joistPurchase").textContent =
     joistBuy.sticks + " хлыстов / " + fmt(joistBuy.meters, 0) + " м";
 
-  $("belt").textContent = "Ждёт правила расстояния между поясами";
-  $("beltPurchase").textContent = "—";
+  $("beltRows").textContent = beltLayout.count + " шт.";
+  $("beltStepOut").textContent = fmt(beltLayout.step) + " мм";
+  $("belt").textContent = fmt(beltMeters, 1) + " м.п.";
+  $("beltPurchase").textContent =
+    beltBuy.sticks + " хлыстов / " + fmt(beltBuy.meters, 0) + " м";
 
   if (base === "ground") {
-    const pile = pileLayout(run);
+    $("pilesPerBelt").textContent = pileLayout.count + " шт.";
+    $("pileStepOut").textContent = fmt(pileLayout.step) + " мм";
+    $("supports").textContent = totalPiles + " свай × 2500 мм";
 
-    if (pile.count) {
-      $("supports").textContent =
-        pile.count + " свай на каждый пояс";
-      $("pileInfo").textContent =
-        "По длине одного пояса: " + pile.count +
-        " свай. Равномерный шаг ≈ " + fmt(pile.module) +
-        " мм. Отступ крайних свай ≈ " + fmt(pile.edge) +
-        " мм. Максимально допустимый шаг — 1500 мм.";
-    } else {
-      $("supports").textContent = "Нужно уточнение геометрии";
-      $("pileInfo").textContent =
-        "Для этой длины не удалось одновременно выдержать шаг 1000–1500 мм и отступ не менее 400 мм.";
-    }
+    $("pileInfo").textContent =
+      "Рядов пояса: " + beltLayout.count +
+      ", шаг ≈ " + fmt(beltLayout.step) +
+      " мм. На каждом поясе: " + pileLayout.count +
+      " свай, шаг ≈ " + fmt(pileLayout.step) +
+      " мм. Все интервалы равномерные и не превышают 1500 мм.";
   } else if (base === "roof") {
+    $("pilesPerBelt").textContent = "—";
+    $("pileStepOut").textContent = "—";
     $("supports").textContent = "Регулируемые пластиковые опоры";
     $("pileInfo").textContent = "Для кровли сваи не применяются.";
   } else {
+    $("pilesPerBelt").textContent = "—";
+    $("pileStepOut").textContent = "—";
     $("supports").textContent = "По выбранной технологии бетона";
     $("pileInfo").textContent = "Алгоритм бетонного основания будет рассчитан отдельно.";
   }
