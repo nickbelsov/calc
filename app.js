@@ -839,6 +839,37 @@ function buildJoists(run,allSeams,maxStep){
   };
 }
 
+function enforcePileEdgeCantilever(spanLength,layout,maxCantilever=200){
+  if(!layout || !layout.positions?.length) return layout;
+
+  let positions=[...layout.positions].sort((a,b)=>a-b);
+
+  // Гарантируем, что крайний свес поддерживаемой конструкции
+  // от первой/последней опоры не превышает 200 мм.
+  if(positions[0] > maxCantilever){
+    positions.unshift(maxCantilever);
+  }
+  if(spanLength - positions[positions.length-1] > maxCantilever){
+    positions.push(spanLength-maxCantilever);
+  }
+
+  positions=uniquePositions(positions,1);
+
+  let maxStep=0;
+  for(let i=0;i<positions.length-1;i++){
+    maxStep=Math.max(maxStep,positions[i+1]-positions[i]);
+  }
+
+  return {
+    ...layout,
+    positions,
+    count:positions.length,
+    step:maxStep||layout.step,
+    edgeCantileverStart:positions[0],
+    edgeCantileverEnd:spanLength-positions[positions.length-1]
+  };
+}
+
 function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide){
   const run=direction==="l"?L:W;
   const belts=[];
@@ -855,7 +886,7 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     const segments=[];
 
     for(const span of spans){
-      const layout=pileAffected
+      let layout=pileAffected
         ? equalLayoutWithHouseOffset(
             span.length,
             CONFIG.ground.pileSpacingMax,
@@ -863,6 +894,8 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
             houseAtStart
           )
         : equalLayout(span.length,CONFIG.ground.pileSpacingMax);
+
+      layout=enforcePileEdgeCantilever(span.length,layout,CONFIG.joist.maxEdgeCantilever);
 
       const piles=layout.positions.map(p=>span.start+p);
 
@@ -1189,6 +1222,8 @@ function calculate(){
       ? equalLayoutWithHouseOffset(run,CONFIG.ground.pileSpacingMax,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"run"))
       : equalLayout(run,CONFIG.ground.pileSpacingMax);
 
+    pileLayout=enforcePileEdgeCantilever(run,pileLayout,CONFIG.joist.maxEdgeCantilever);
+
     totalPiles=beltLayout.count*pileLayout.count;
   }
 
@@ -1252,13 +1287,22 @@ function calculate(){
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
         "Пояс 80×80×2 обрезан по реальному контуру. Сваи расставлены отдельно на каждом фактическом участке пояса с равномерным шагом не более 1500 мм."+
-        (hasHouse?" Со стороны дома применяется отступ 400 мм.":"");
+        (hasHouse?" Со стороны дома применяется отступ 400 мм.":"")+
+        (pileLayout?.edgeCantileverStart!=null
+          ? " Крайний свес 40×40 относительно опоры: "+fmt(pileLayout.edgeCantileverStart)+" / "+fmt(pileLayout.edgeCantileverEnd)+" мм, максимум 200 мм."
+          : "");
     }else{
       $("pilesPerBelt").textContent=pileLayout.count+" шт.";
       $("pileStepOut").textContent=pileLayout.houseOffsetApplied
         ? "400 мм от дома, далее ≈ "+fmt(pileLayout.step)+" мм"
         : fmt(pileLayout.step)+" мм";
       $("checkPileStep").textContent=fmt(pileLayout.step)+" / 1500 мм";
+      if(pileLayout.edgeCantileverStart!=null){
+        $("pileInfo").dataset.edgeCheck=
+          "Крайний свес 40×40 относительно опоры: "+
+          fmt(pileLayout.edgeCantileverStart)+" / "+
+          fmt(pileLayout.edgeCantileverEnd)+" мм (макс. 200 мм).";
+      }
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
         "Рядов пояса: "+beltLayout.count+
