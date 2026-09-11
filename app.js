@@ -13,6 +13,18 @@ function fmt(n, digits = 0) {
   });
 }
 
+function stockPurchase(meters) {
+  const stockM = CONFIG.metal.stockLength / 1000;
+  const sticks = Math.ceil(meters / stockM);
+  return { sticks, meters: sticks * stockM };
+}
+
+function joistStepByBoardHeight(height) {
+  return height <= CONFIG.joist.stepByBoardHeight.thinMaxHeight
+    ? CONFIG.joist.stepByBoardHeight.thinStep
+    : CONFIG.joist.stepByBoardHeight.thickStep;
+}
+
 function chooseBoardCombination(runLength) {
   const lengths = CONFIG.boardLengths;
   const maxPieces = Math.ceil(runLength / Math.min(...lengths)) + 2;
@@ -26,18 +38,14 @@ function chooseBoardCombination(runLength) {
       if (
         !best ||
         candidate.waste < best.waste ||
-        (candidate.waste === best.waste && candidate.pieces < best.pieces) ||
-        (candidate.waste === best.waste && candidate.pieces === best.pieces && candidate.sum < best.sum)
-      ) {
-        best = candidate;
-      }
+        (candidate.waste === best.waste && candidate.pieces < best.pieces)
+      ) best = candidate;
       return;
     }
 
     if (depth >= maxPieces) return;
 
     for (const len of lengths) {
-      if (best && sum > runLength + best.waste) continue;
       combo.push(len);
       walk(combo, sum + len, depth + 1);
       combo.pop();
@@ -55,25 +63,33 @@ function chooseBoardCombination(runLength) {
 function seamPositions(actualPieces, runLength, mirrored = false) {
   const seams = [];
   let x = 0;
+
   for (let i = 0; i < actualPieces.length - 1; i++) {
     x += actualPieces[i];
     seams.push(x);
   }
-  return mirrored ? seams.map(x => runLength - x).sort((a,b) => a-b) : seams;
+
+  return mirrored
+    ? seams.map(x => runLength - x).sort((a, b) => a - b)
+    : seams;
 }
 
 function uniquePositions(values, tolerance = 2) {
-  const sorted = [...values].sort((a,b)=>a-b);
+  const sorted = [...values].sort((a, b) => a - b);
   const out = [];
+
   for (const v of sorted) {
     if (!out.length || Math.abs(out[out.length - 1] - v) > tolerance) out.push(v);
   }
+
   return out;
 }
 
 function regularJoistPositions(run, maxStep) {
-  const start = CONFIG.overhang.max;
-  const end = run - CONFIG.overhang.max;
+  const edge = Math.min(CONFIG.joist.maxEdgeCantilever, run / 2);
+  const start = edge;
+  const end = run - edge;
+
   if (end <= start) return [run / 2];
 
   const span = end - start;
@@ -82,19 +98,20 @@ function regularJoistPositions(run, maxStep) {
 
   const positions = [];
   for (let i = 0; i <= intervals; i++) positions.push(start + step * i);
+
   return positions;
 }
 
 function buildJoists(run, allSeams, maxStep) {
   const seamOffset = CONFIG.joist.seamOverhang;
-  const doublePositions = [];
+  const doubled = [];
 
   for (const seam of allSeams) {
-    if (seam - seamOffset > 0) doublePositions.push(seam - seamOffset);
-    if (seam + seamOffset < run) doublePositions.push(seam + seamOffset);
+    if (seam - seamOffset > 0) doubled.push(seam - seamOffset);
+    if (seam + seamOffset < run) doubled.push(seam + seamOffset);
   }
 
-  const seamJoists = uniquePositions(doublePositions);
+  const seamJoists = uniquePositions(doubled);
   const regular = regularJoistPositions(run, maxStep)
     .filter(p => !seamJoists.some(s => Math.abs(s - p) < 80));
 
@@ -105,34 +122,20 @@ function buildJoists(run, allSeams, maxStep) {
   };
 }
 
-function buildBelts(across, beltStep) {
-  const edge = Math.min(CONFIG.overhang.max, across / 2);
-  const span = Math.max(0, across - 2 * edge);
-  const intervals = Math.max(1, Math.ceil(span / beltStep));
-  const step = intervals ? span / intervals : 0;
-  const positions = [];
-  for (let i = 0; i <= intervals; i++) positions.push(edge + i * step);
-  return positions;
-}
-
-function pileLayout(run, preferred) {
+function pileLayout(run) {
   const minS = CONFIG.ground.pileSpacingMin;
   const maxS = CONFIG.ground.pileSpacingMax;
   const minEdge = CONFIG.ground.minEdge;
 
-  let count = Math.max(2, Math.ceil(run / preferred));
-
-  while (count < 100) {
+  for (let count = 2; count < 100; count++) {
     const module = run / count;
     const edge = module / 2;
+
     if (module >= minS && module <= maxS && edge >= minEdge) {
       const positions = [];
       for (let i = 0; i < count; i++) positions.push(edge + i * module);
       return { count, module, edge, positions };
     }
-    if (module > maxS) count++;
-    else if (module < minS && count > 2) count--;
-    else count++;
   }
 
   return { count: 0, module: 0, edge: 0, positions: [] };
@@ -142,10 +145,9 @@ function renderPlan(model) {
   const terrace = $("terrace");
   terrace.innerHTML = "";
 
-  const { run, across, direction, rowCount, rowSeams, joists } = model;
+  const { run, direction, rowCount, rowSeams, joists } = model;
   const w = terrace.clientWidth;
   const h = terrace.clientHeight;
-
   const runPx = direction === "l" ? w : h;
   const acrossPx = direction === "l" ? h : w;
 
@@ -153,24 +155,29 @@ function renderPlan(model) {
     const p = (i / rowCount) * acrossPx;
     const line = document.createElement("div");
     line.className = "boardLine";
+
     if (direction === "l") {
-      Object.assign(line.style, {left:"0", top:p+"px", width:"100%", height:"1px"});
+      Object.assign(line.style, { left: "0", top: p + "px", width: "100%", height: "1px" });
     } else {
-      Object.assign(line.style, {top:"0", left:p+"px", height:"100%", width:"1px"});
+      Object.assign(line.style, { top: "0", left: p + "px", height: "100%", width: "1px" });
     }
+
     terrace.appendChild(line);
   }
 
   const seamSet = uniquePositions(rowSeams.flat());
+
   for (const seam of seamSet) {
     const p = seam / run * runPx;
     const line = document.createElement("div");
     line.className = "seamLine";
+
     if (direction === "l") {
-      Object.assign(line.style, {top:"0", left:p+"px", height:"100%", width:"2px"});
+      Object.assign(line.style, { top: "0", left: p + "px", height: "100%", width: "2px" });
     } else {
-      Object.assign(line.style, {left:"0", top:p+"px", width:"100%", height:"2px"});
+      Object.assign(line.style, { left: "0", top: p + "px", width: "100%", height: "2px" });
     }
+
     terrace.appendChild(line);
   }
 
@@ -178,16 +185,18 @@ function renderPlan(model) {
     const p = pos / run * runPx;
     const line = document.createElement("div");
     line.className = "joistLine";
+
     if (direction === "l") {
-      Object.assign(line.style, {top:"0", left:p+"px", height:"100%", width:"3px"});
+      Object.assign(line.style, { top: "0", left: p + "px", height: "100%", width: "3px" });
     } else {
-      Object.assign(line.style, {left:"0", top:p+"px", width:"100%", height:"3px"});
+      Object.assign(line.style, { left: "0", top: p + "px", width: "100%", height: "3px" });
     }
+
     terrace.appendChild(line);
   }
 }
 
-function updateViewSize(L, W, direction) {
+function updateViewSize(L, W) {
   const t = $("terrace");
   const scale = Math.min(650 / L, 430 / W);
   t.style.width = Math.max(300, L * scale) + "px";
@@ -196,11 +205,13 @@ function updateViewSize(L, W, direction) {
 
 function technologyText(base) {
   if (base === "ground") {
-    return "Логика: раскладка ДПК → лаги 40×40×2 → опорный пояс 80×80×2 → винтовые сваи 2500 мм.";
+    return "Расчёт сверху вниз: ДПК → лаги 40×40×2 → опорный пояс 80×80×2 → винтовые сваи 2500 мм. Металл закупается хлыстами по 6 м.";
   }
+
   if (base === "roof") {
     return "Кровля / гидроизоляция: только регулируемые пластиковые опоры → металлический каркас → ДПК.";
   }
+
   return "Бетон: резиновые подкладки, арматурные штыри или регулируемые пластиковые опоры.";
 }
 
@@ -210,13 +221,12 @@ function calculate() {
   const direction = $("dir").value;
   const base = $("base").value;
   const boardModule = +$("boardModule").value || CONFIG.defaultBoardModule;
-  const joistStep = +$("step").value || CONFIG.joist.defaultStep;
-  const beltStep = +$("beltStep").value || CONFIG.belt.defaultStep;
-  const pileTarget = +$("pileTarget").value || CONFIG.ground.preferredPileSpacing;
+  const boardHeight = +$("boardHeight").value || 23;
 
   const run = direction === "l" ? L : W;
   const across = direction === "l" ? W : L;
 
+  const joistStep = joistStepByBoardHeight(boardHeight);
   const rowCount = Math.ceil(across / boardModule);
   const plan = chooseBoardCombination(run);
 
@@ -227,64 +237,67 @@ function calculate() {
 
   const allSeams = uniquePositions(rowSeams.flat());
   const joists = buildJoists(run, allSeams, joistStep);
-  const belts = buildBelts(across, beltStep);
 
   const joistLengthM = across / 1000;
   const regularJoistMeters = joists.regular.length * joistLengthM;
   const seamJoistMeters = joists.seam.length * joistLengthM;
   const totalJoistMeters = regularJoistMeters + seamJoistMeters;
-
-  const beltLengthM = run / 1000;
-  const beltMeters = belts.length * beltLengthM;
+  const joistBuy = stockPurchase(totalJoistMeters);
 
   const boardsToBuy = rowCount * plan.combo.length;
   const rawWaste = rowCount * plan.waste;
-  const totalSeams = rowSeams.reduce((s, a) => s + a.length, 0);
+  const totalSeams = rowSeams.reduce((sum, row) => sum + row.length, 0);
 
   $("area").textContent = fmt(L * W / 1e6, 2) + " м²";
   $("baseOut").textContent = baseNames[base];
   $("rows").textContent = fmt(rowCount) + " шт.";
   $("boardCount").textContent = fmt(boardsToBuy) + " шт.";
-  $("boardPlan").textContent = plan.combo.map(x => x/1000 + " м").join(" + ");
+  $("boardPlan").textContent = plan.combo.map(x => x / 1000 + " м").join(" + ");
   $("boardWaste").textContent = fmt(rawWaste / 1000, 2) + " м";
   $("seams").textContent = fmt(totalSeams) + " шт.";
 
+  $("joistStepOut").textContent = joistStep + " мм";
   $("regularJoists").textContent =
     fmt(joists.regular.length) + " шт. / " + fmt(regularJoistMeters, 1) + " м.п.";
-
   $("doubleJoists").textContent =
     fmt(joists.seam.length) + " шт. / " + fmt(seamJoistMeters, 1) + " м.п.";
+  $("joists").textContent = fmt(totalJoistMeters, 1) + " м.п.";
+  $("joistPurchase").textContent =
+    joistBuy.sticks + " хлыстов / " + fmt(joistBuy.meters, 0) + " м";
 
-  $("joists").textContent =
-    fmt(joists.all.length) + " шт. / " + fmt(totalJoistMeters, 1) + " м.п.";
-
-  $("belt").textContent =
-    fmt(belts.length) + " шт. / " + fmt(beltMeters, 1) + " м.п.";
+  $("belt").textContent = "Ждёт правила расстояния между поясами";
+  $("beltPurchase").textContent = "—";
 
   if (base === "ground") {
-    const pile = pileLayout(run, pileTarget);
-    const totalPiles = pile.count * belts.length;
+    const pile = pileLayout(run);
 
-    $("supports").textContent = fmt(totalPiles) + " свай × 2500 мм";
-    $("pileInfo").textContent =
-      "На каждом поясе: " + pile.count +
-      " свай. Равномерный модуль ≈ " + fmt(pile.module) +
-      " мм, отступ крайних свай ≈ " + fmt(pile.edge) + " мм.";
+    if (pile.count) {
+      $("supports").textContent =
+        pile.count + " свай на каждый пояс";
+      $("pileInfo").textContent =
+        "По длине одного пояса: " + pile.count +
+        " свай. Равномерный шаг ≈ " + fmt(pile.module) +
+        " мм. Отступ крайних свай ≈ " + fmt(pile.edge) +
+        " мм. Максимально допустимый шаг — 1500 мм.";
+    } else {
+      $("supports").textContent = "Нужно уточнение геометрии";
+      $("pileInfo").textContent =
+        "Для этой длины не удалось одновременно выдержать шаг 1000–1500 мм и отступ не менее 400 мм.";
+    }
   } else if (base === "roof") {
     $("supports").textContent = "Регулируемые пластиковые опоры";
     $("pileInfo").textContent = "Для кровли сваи не применяются.";
   } else {
     $("supports").textContent = "По выбранной технологии бетона";
-    $("pileInfo").textContent = "Расчёт бетонных опор будет добавлен отдельным алгоритмом.";
+    $("pileInfo").textContent = "Алгоритм бетонного основания будет рассчитан отдельно.";
   }
 
   $("tech").textContent = technologyText(base);
 
-  updateViewSize(L, W, direction);
+  updateViewSize(L, W);
 
   setTimeout(() => renderPlan({
     run,
-    across,
     direction,
     rowCount,
     rowSeams,
@@ -298,12 +311,14 @@ function updateBaseControls() {
   $("concrete").classList.toggle("hidden", base !== "concrete");
 }
 
-["L","W","dir","base","boardModule","step","beltStep","pileTarget"].forEach(id => {
+["L", "W", "dir", "base", "boardModule", "boardHeight"].forEach(id => {
   const el = $(id);
-  if (el) el.addEventListener("input", () => {
-    updateBaseControls();
-    calculate();
-  });
+  if (el) {
+    el.addEventListener("input", () => {
+      updateBaseControls();
+      calculate();
+    });
+  }
 });
 
 $("calc").addEventListener("click", calculate);
