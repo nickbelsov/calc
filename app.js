@@ -1731,7 +1731,35 @@ function updateControls(){
   $(id).addEventListener("change",()=>{if(lastModel)renderPlan(lastModel);});
 });
 
+function loadControlScheme(){
+  // Контрольный чертёж из загруженной пользователем схемы:
+  // основная площадка 4500×3500 мм;
+  // центральный выступ 600×1200 мм;
+  // 1950 + 600 + 1950 = 4500.
+  polygonPoints=[
+    {x:0,y:0},
+    {x:4500,y:0},
+    {x:4500,y:3500},
+    {x:2550,y:3500},
+    {x:2550,y:4700},
+    {x:1950,y:4700},
+    {x:1950,y:3500},
+    {x:0,y:3500}
+  ];
+  polygonClosed=true;
+  drawingPolygon=false;
+  draggingVertex=-1;
+  polygonViewBoxLock=null;
+
+  $("shapeMode").value="free";
+  $("dir").value="l";
+  updateControls();
+  calculate();
+  setTimeout(fitCanvasView,60);
+}
+
 $("drawPolygon")?.addEventListener("click",startDrawingPolygon);
+$("loadControlScheme")?.addEventListener("click",loadControlScheme);
 $("resetPolygon")?.addEventListener("click",resetPolygon);
 $("calc").addEventListener("click",calculate);
 
