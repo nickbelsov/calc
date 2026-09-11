@@ -484,7 +484,7 @@ function buildRowsHalf(runLength,rowCount,allowedLengths){
   // детали упаковываются в доступные доски 3/4/6 м с повторным использованием остатков.
   const packed=packPiecesIntoStock(allPieceLengths,allowedLengths);
 
-  if(!packed.rows && packed.warning){
+  if((packed.rows?.length===0) && packed.warning){
     return {
       rows:[],
       purchases:packed.purchases,
@@ -788,21 +788,54 @@ function regularJoistPositions(run,maxStep){
 
 function buildJoists(run,allSeams,maxStep){
   const seamOffset=CONFIG.joist.seamOverhang;
-  const doubled=[];
+  const seamJoists=[];
 
   for(const seam of allSeams){
-    if(seam-seamOffset>0) doubled.push(seam-seamOffset);
-    if(seam+seamOffset<run) doubled.push(seam+seamOffset);
+    if(seam-seamOffset>0) seamJoists.push(seam-seamOffset);
+    if(seam+seamOffset<run) seamJoists.push(seam+seamOffset);
   }
 
-  const seamJoists=uniquePositions(doubled);
-  const regular=regularJoistPositions(run,maxStep)
-    .filter(p=>!seamJoists.some(s=>Math.abs(s-p)<80));
+  const seam=uniquePositions(seamJoists);
+  const edge=Math.min(CONFIG.joist.maxEdgeCantilever,run/2);
+
+  // Обязательные опоры: две трубы у каждого стыка.
+  // Между ними и краями достраиваем обычные трубы так,
+  // чтобы ни один фактический шаг не превышал maxStep.
+  const anchors=uniquePositions([edge,...seam,run-edge].filter(x=>x>=0&&x<=run));
+  const regular=[];
+
+  for(let i=0;i<anchors.length-1;i++){
+    const a=anchors[i],b=anchors[i+1];
+    const span=b-a;
+    const intervals=Math.max(1,Math.ceil(span/maxStep));
+    const step=span/intervals;
+
+    for(let j=1;j<intervals;j++){
+      regular.push(a+step*j);
+    }
+  }
+
+  // Крайние опоры тоже являются обычным профилем, если не совпали
+  // со стыковыми трубами.
+  [edge,run-edge].forEach(p=>{
+    if(!seam.some(s=>Math.abs(s-p)<2)) regular.push(p);
+  });
+
+  const regularUnique=uniquePositions(regular);
+  const all=uniquePositions([...regularUnique,...seam]);
+
+  let actualMaxStep=0;
+  for(let i=0;i<all.length-1;i++){
+    actualMaxStep=Math.max(actualMaxStep,all[i+1]-all[i]);
+  }
 
   return {
-    regular:uniquePositions(regular),
-    seam:seamJoists,
-    all:uniquePositions([...regular,...seamJoists])
+    regular:regularUnique,
+    seam,
+    all,
+    actualMaxStep,
+    edgeOverhangStart:all.length?all[0]:run/2,
+    edgeOverhangEnd:all.length?run-all[all.length-1]:run/2
   };
 }
 
@@ -1191,7 +1224,7 @@ function calculate(){
   $("seams").textContent=totalSeams+" шт.";
   renderRowPlans(boardRows);
 
-  $("joistStepOut").textContent=joistStep+" мм";
+  $("joistStepOut").textContent="до "+fmt(joists.actualMaxStep||joistStep)+" мм";
   $("regularJoists").textContent=joists.regular.length+" шт. / "+fmt(regularJoistMeters,1)+" м.п.";
   $("doubleJoists").textContent=joists.seam.length+" шт. / "+fmt(seamJoistMeters,1)+" м.п.";
   $("joists").textContent=fmt(totalJoistMeters,1)+" м.п.";
