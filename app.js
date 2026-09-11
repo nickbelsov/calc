@@ -1423,3 +1423,18 @@ function notify3D(){
 }
 
 $("canvasViewport")?.addEventListener("contextmenu",e=>e.preventDefault());
+
+window.getNimtech3DModel=()=>lastModel;
+window.getNimtechProjectInputs=()=>({
+  L:+$("L").value||6200,
+  W:+$("W").value||3800,
+  boardModule:+$("boardModule").value||150,
+  boardHeight:+$("boardHeight").value||23,
+  direction:$("dir").value,
+  shapeMode:$("shapeMode").value,
+  base:$("base").value,
+  polygonPoints:polygonPoints.map(p=>({...p})),
+  polygonClosed
+});
+function notify3D(){window.dispatchEvent(new CustomEvent("nimtech-model-change"));}
+$("canvasViewport")?.addEventListener("contextmenu",e=>e.preventDefault());
