@@ -639,6 +639,60 @@ function buildPolygonBoardRows(L,W,direction,boardModule,mode,allowedLengths){
   return {rows,purchases,reusedPieces,finalWaste,offcuts,warning,polygon:true};
 }
 
+function getMasterPolygonSeams(boardRows){
+  if(!boardRows?.polygon) return [];
+  let best=null;
+
+  for(const row of boardRows.rows){
+    for(const seg of row.segments||[]){
+      if(!best || seg.length>best.length) best=seg;
+    }
+  }
+
+  if(!best) return [];
+
+  return (best.seams||[]).map(s=>best.start+s);
+}
+
+function applyMasterSeamsToPolygonRows(boardRows, masterSeams){
+  if(!boardRows?.polygon || !masterSeams.length) return boardRows;
+
+  for(const row of boardRows.rows){
+    const nextSegments=[];
+
+    for(const seg of row.segments||[]){
+      const inside=masterSeams
+        .filter(x=>x>seg.start+1 && x<seg.start+seg.length-1)
+        .sort((a,b)=>a-b);
+
+      const cuts=[seg.start,...inside,seg.start+seg.length];
+      const pieces=[];
+      const seams=[];
+
+      for(let i=0;i<cuts.length-1;i++){
+        const len=cuts[i+1]-cuts[i];
+        pieces.push({length:len,sourceLength:len,reused:false});
+        if(i<cuts.length-2) seams.push(cuts[i+1]-seg.start);
+      }
+
+      nextSegments.push({
+        start:seg.start,
+        length:seg.length,
+        pieces,
+        seams
+      });
+    }
+
+    row.segments=nextSegments;
+    row.seams=[];
+    for(const seg of nextSegments){
+      for(const s of seg.seams) row.seams.push(seg.start+s);
+    }
+  }
+
+  return boardRows;
+}
+
 function uniquePositions(values,tolerance=2){
   const sorted=[...values].sort((a,b)=>a-b);
   const out=[];
@@ -874,11 +928,21 @@ function calculate(){
 
   const joistStep=joistStepByBoardHeight(boardHeight);
   const rowCount=Math.ceil(across/boardModule);
-  const boardRows = shapeMode==="free" && polygonClosed
+  let boardRows = shapeMode==="free" && polygonClosed
     ? buildPolygonBoardRows(L,W,direction,boardModule,layoutMode,allowedLengths)
     : buildBoardRows(run,rowCount,layoutMode,allowedLengths);
 
-  const allSeams=uniquePositions((boardRows.rows||[]).flatMap(r=>r.seams));
+  let masterSeams=[];
+  let allSeams=[];
+
+  if(shapeMode==="free" && boardRows.polygon){
+    masterSeams=getMasterPolygonSeams(boardRows);
+    boardRows=applyMasterSeamsToPolygonRows(boardRows,masterSeams);
+    allSeams=masterSeams;
+  }else{
+    allSeams=uniquePositions((boardRows.rows||[]).flatMap(r=>r.seams));
+  }
+
   const joists=buildJoists(run,allSeams,joistStep);
 
   const joistLengthM=across/1000;
@@ -919,7 +983,7 @@ function calculate(){
   const freeWarning = shapeMode==="free" && !polygonClosed
     ? "Замкните контур кликом по первой точке — после этого начнётся расчёт раскладки внутри формы."
     : shapeMode==="free"
-      ? "Доска уже раскладывается только внутри замкнутого контура. Профиль 40×40, пояс 80×80 и сваи пока считаются по габариту; их точное отсечение по контуру будет следующим этапом."
+      ? "Для произвольной формы оси стыков берутся по самому длинному непрерывному ряду и протягиваются через всю площадку. Дополнительный профиль 40×40×2 под локальные стыки не добавляется. Пояс 80×80 и сваи пока считаются по габариту."
       : "";
   warning.textContent=[boardRows.warning,freeWarning].filter(Boolean).join(" ");
   warning.classList.toggle("hidden",!warning.textContent);
@@ -978,7 +1042,7 @@ function calculate(){
 
   updateViewSize(L,W);
 
-  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode};
+  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,masterSeams};
   setTimeout(()=>{
     renderPlan(lastModel);
     if(shapeMode==="free") renderPolygonEditor();
