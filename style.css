@@ -9,20 +9,30 @@ section{display:flex;align-items:center;justify-content:center;overflow:auto;bac
 label{display:block;font-size:12px;color:#66707b;margin:14px 0 5px}
 small{display:block;margin-top:5px;color:#858d96;font-size:11px;line-height:1.35}
 input,select{width:100%;padding:9px;border:1px solid #ccd1d7;border-radius:7px}
+.checkrow{display:flex;align-items:center;gap:8px}.checkrow input{width:auto}
 button{width:100%;padding:11px;margin-top:18px;background:#252a31;color:#fff;border:0;border-radius:7px;cursor:pointer}
 h2{font-size:17px}h3{font-size:12px;text-transform:uppercase;color:#727b85;margin-top:24px}
 p{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:8px 0;font-size:13px;gap:15px}
 p b{text-align:right}
-.canvasWrap{min-width:760px;min-height:560px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:40px}
-#terrace{position:relative;width:620px;height:380px;background:#a77d53;border:5px solid #6f5b46;box-shadow:0 15px 35px #0002;overflow:hidden}
-.boardLine,.seamLine,.joistLine{position:absolute;pointer-events:none}
-.boardLine{background:#75583d;opacity:.65}
-.seamLine{background:#c0392b;opacity:.9}
-.joistLine{background:#27313a;opacity:.9}
-.legend{display:flex;gap:18px;font-size:12px;color:#555}
+.rule{display:block;color:#606872}
+.canvasWrap{min-width:820px;min-height:620px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px}
+.layerControls{display:flex;gap:14px;flex-wrap:wrap;background:#fff;padding:10px 14px;border-radius:8px;box-shadow:0 2px 10px #0001}
+.layerControls label{margin:0;display:flex;align-items:center;gap:6px;color:#39414a}
+.layerControls input{width:auto}
+#terrace{position:relative;width:620px;height:380px;background:#f0e2d2;border:5px solid #6f5b46;box-shadow:0 15px 35px #0002;overflow:hidden}
+.boardLine,.seamLine,.joistLine,.beltLine,.pileDot,.dimLabel{position:absolute;pointer-events:none}
+.boardLine{background:#8b6544;opacity:.65;z-index:4}
+.seamLine{background:#c0392b;opacity:.85;z-index:5}
+.joistLine{background:#2d3945;opacity:.78;z-index:2}
+.joistLine.double{background:#111820;opacity:.95}
+.beltLine{background:#aa6a1f;opacity:.9;z-index:1}
+.pileDot{width:12px;height:12px;border-radius:50%;background:#2b6cb0;border:2px solid #fff;box-shadow:0 0 0 1px #2b6cb0;z-index:3;transform:translate(-50%,-50%)}
+.dimLabel{font-size:10px;background:#fff;color:#30363d;padding:2px 4px;border-radius:4px;z-index:8;box-shadow:0 1px 3px #0002}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#555}
 .legend span{display:flex;align-items:center;gap:6px}
 .legend i{display:inline-block;width:18px;height:4px}
-.boardKey{background:#75583d}.seamKey{background:#c0392b}.joistKey{background:#27313a}
+.boardKey{background:#8b6544}.regularJoistKey{background:#2d3945}.doubleJoistKey{background:#111820}.beltKey{background:#aa6a1f}
+.pileKey{width:10px!important;height:10px!important;border-radius:50%;background:#2b6cb0}
 .hidden{display:none}
 #tech,.info{font-size:12px;line-height:1.5;background:#f3f4f6;padding:12px;border-radius:8px;margin-top:15px}
 .info{background:#eef5ff}
