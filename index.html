@@ -13,6 +13,14 @@
     }
   }
   </script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
 <header class="appHeader">
@@ -143,6 +151,7 @@
 
     <div id="canvasViewport" class="canvasViewport">
       <div id="threeViewport" class="threeViewport hidden"></div>
+      <div id="threeViewport" class="threeViewport hidden"></div>
       <div id="canvasScene" class="canvasScene">
     <div id="terrace" class="terraceCanvas">
       <div id="constructionLayer" class="constructionLayer"></div>
@@ -210,6 +219,7 @@
 
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script type="module" src="viewer3d.js"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
