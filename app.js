@@ -1225,6 +1225,9 @@ function calculate(){
   renderRowPlans(boardRows);
 
   $("joistStepOut").textContent="до "+fmt(joists.actualMaxStep||joistStep)+" мм";
+  $("checkJoistStep").textContent=fmt(joists.actualMaxStep||joistStep)+" / "+joistStep+" мм";
+  $("checkEdgeOverhang").textContent=fmt(joists.edgeOverhangStart)+" / "+fmt(joists.edgeOverhangEnd)+" мм";
+  $("checkBeltStep").textContent=fmt(beltLayout.step)+" / 1500 мм";
   $("regularJoists").textContent=joists.regular.length+" шт. / "+fmt(regularJoistMeters,1)+" м.п.";
   $("doubleJoists").textContent=joists.seam.length+" шт. / "+fmt(seamJoistMeters,1)+" м.п.";
   $("joists").textContent=fmt(totalJoistMeters,1)+" м.п.";
@@ -1243,6 +1246,9 @@ function calculate(){
       $("pileStepOut").textContent=polygonStructure.maxPileStep
         ? "до "+fmt(polygonStructure.maxPileStep)+" мм"
         : "—";
+      $("checkPileStep").textContent=polygonStructure.maxPileStep
+        ? fmt(polygonStructure.maxPileStep)+" / 1500 мм"
+        : "—";
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
         "Пояс 80×80×2 обрезан по реальному контуру. Сваи расставлены отдельно на каждом фактическом участке пояса с равномерным шагом не более 1500 мм."+
@@ -1252,6 +1258,7 @@ function calculate(){
       $("pileStepOut").textContent=pileLayout.houseOffsetApplied
         ? "400 мм от дома, далее ≈ "+fmt(pileLayout.step)+" мм"
         : fmt(pileLayout.step)+" мм";
+      $("checkPileStep").textContent=fmt(pileLayout.step)+" / 1500 мм";
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
         "Рядов пояса: "+beltLayout.count+
@@ -1262,6 +1269,7 @@ function calculate(){
   }else if(base==="roof"){
     $("pilesPerBelt").textContent="—";
     $("pileStepOut").textContent="—";
+    $("checkPileStep").textContent="—";
     $("supports").textContent="Регулируемые пластиковые опоры";
     $("pileInfo").textContent="Для кровли сваи не применяются.";
   }else{
