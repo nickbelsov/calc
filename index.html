@@ -1,1 +1,103 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nimtech — калькулятор террасы</title><link rel="stylesheet" href="style.css"></head><body><header><b>NIMTECH</b><span>Прототип планировщика террасы</span></header><main><aside><h2>Проект</h2><label>Длина, мм</label><input id="L" type="number" value="6200"><label>Ширина, мм</label><input id="W" type="number" value="3800"><label>Направление доски</label><select id="dir"><option value="l">По длине</option><option value="w">По ширине</option></select><h3>Тип основания</h3><select id="base"><option value="ground">Грунт / земля</option><option value="concrete">Бетон</option><option value="roof">Кровля / гидроизоляция</option></select><div id="ground"><label>Шаг лаг 40×40×2, мм</label><input id="step" type="number" min="300" max="400" value="350"></div><div id="concrete" class="hidden"><label>Тип опоры</label><select><option>Резиновые подкладки</option><option>Арматурные штыри</option><option>Регулируемые пластиковые опоры</option></select></div><button id="calc">Рассчитать</button></aside><section><div id="terrace"></div></section><aside class="result"><h2>Расчёт</h2><p>Площадь <b id="area"></b></p><p>Основание <b id="baseOut"></b></p><h3>ДПК</h3><p>Длины: <b>3 / 4 / 6 м</b></p><p>Стыки: <b>сдвоенная лага</b></p><p>Свес: <b>100–150 мм</b></p><h3>Подконструкция</h3><p>Лаги 40×40×2: <b id="joists">—</b></p><p>Пояс 80×80×2: <b id="belt">—</b></p><p>Опоры: <b id="supports">—</b></p><div id="tech"></div></aside></main><script src="config.js"></script><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nimtech — калькулятор террасы</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><b>NIMTECH</b><span>Прототип планировщика террасы</span></header>
+
+<main>
+<aside>
+  <h2>Проект</h2>
+
+  <label>Длина, мм</label>
+  <input id="L" type="number" value="6200" min="1000">
+
+  <label>Ширина, мм</label>
+  <input id="W" type="number" value="3800" min="1000">
+
+  <label>Направление доски</label>
+  <select id="dir">
+    <option value="l">По длине</option>
+    <option value="w">По ширине</option>
+  </select>
+
+  <label>Расчётный модуль доски, мм</label>
+  <input id="boardModule" type="number" value="150" min="50">
+  <small>Временно вручную. Позже значение будет браться из выбранной модели ДПК.</small>
+
+  <h3>Тип основания</h3>
+  <select id="base">
+    <option value="ground">Грунт / земля</option>
+    <option value="concrete">Бетон</option>
+    <option value="roof">Кровля / гидроизоляция</option>
+  </select>
+
+  <div id="ground">
+    <label>Максимальный шаг лаг 40×40×2, мм</label>
+    <input id="step" type="number" min="300" max="400" value="350">
+
+    <label>Шаг опорного пояса 80×80×2, мм</label>
+    <input id="beltStep" type="number" min="500" value="1500">
+    <small>Пока тестовый параметр — точное правило для пояса ещё утверждаем.</small>
+
+    <label>Предпочтительный шаг свай, мм</label>
+    <input id="pileTarget" type="number" min="1000" max="2000" value="1500">
+  </div>
+
+  <div id="concrete" class="hidden">
+    <label>Тип опоры</label>
+    <select id="concreteSupport">
+      <option>Резиновые подкладки</option>
+      <option>Арматурные штыри</option>
+      <option>Регулируемые пластиковые опоры</option>
+    </select>
+  </div>
+
+  <button id="calc">Рассчитать</button>
+</aside>
+
+<section>
+  <div class="canvasWrap">
+    <div id="terrace"></div>
+    <div class="legend">
+      <span><i class="boardKey"></i> ДПК</span>
+      <span><i class="seamKey"></i> стык</span>
+      <span><i class="joistKey"></i> сдвоенная лага</span>
+    </div>
+  </div>
+</section>
+
+<aside class="result">
+  <h2>Расчёт</h2>
+  <p>Площадь <b id="area"></b></p>
+  <p>Основание <b id="baseOut"></b></p>
+
+  <h3>Раскладка ДПК</h3>
+  <p>Доступные длины <b>3 / 4 / 6 м</b></p>
+  <p>Рядов доски <b id="rows">—</b></p>
+  <p>Досок к закупке <b id="boardCount">—</b></p>
+  <p>Схема ряда <b id="boardPlan">—</b></p>
+  <p>Отход до повторного использования <b id="boardWaste">—</b></p>
+  <p>Стыков <b id="seams">—</b></p>
+  <p>Свес у стыка <b>100–150 мм</b></p>
+
+  <h3>Подконструкция</h3>
+  <p>Обычные лаги 40×40×2 <b id="regularJoists">—</b></p>
+  <p>Сдвоенные лаги под стыками <b id="doubleJoists">—</b></p>
+  <p>Всего 40×40×2 <b id="joists">—</b></p>
+  <p>Пояс 80×80×2 <b id="belt">—</b></p>
+  <p>Опоры / сваи <b id="supports">—</b></p>
+
+  <div id="pileInfo" class="info"></div>
+  <div id="tech"></div>
+</aside>
+</main>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
