@@ -415,3 +415,23 @@ main,.workspace,.canvasWrap,.canvasViewport{
 @media(max-width:1280px){
   main{grid-template-columns:280px minmax(0,1fr)}
 }
+
+/* Unified CAD scene origin */
+.canvasScene{
+  left:50%;
+  top:50%;
+  width:0;
+  height:0;
+  overflow:visible;
+}
+#terrace{
+  transform:translate(-50%,-50%);
+  transform-origin:center center;
+}
+.edgeLabel{
+  font-family:Inter,Arial,sans-serif;
+  font-weight:500;
+  paint-order:stroke;
+  stroke:#fff;
+  stroke-width:7px;
+}
