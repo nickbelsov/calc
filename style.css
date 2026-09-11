@@ -364,3 +364,54 @@ body.view3d .zoomControls{visibility:hidden}
   .appHeader{grid-template-columns:minmax(240px,1fr) auto}
   .topNav{display:none}
 }
+
+/* Geometry-safe viewport + project-scale grid */
+.workspace{
+  background:#f3f4f4;
+  background-image:none!important;
+}
+.canvasWrap{
+  min-width:0;
+  overflow:hidden;
+}
+.canvasToolbar,.canvasFooter,.canvasViewport{
+  min-width:0;
+}
+.canvasViewport{
+  isolation:isolate;
+  overflow:hidden;
+  background-color:#fbfbfa;
+  background-image:
+    linear-gradient(rgba(97,106,111,.13) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(97,106,111,.13) 1px,transparent 1px),
+    linear-gradient(rgba(97,106,111,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(97,106,111,.055) 1px,transparent 1px);
+  background-size:
+    var(--grid-major-x,80px) var(--grid-major-y,80px),
+    var(--grid-major-x,80px) var(--grid-major-y,80px),
+    var(--grid-minor-x,40px) var(--grid-minor-y,40px),
+    var(--grid-minor-x,40px) var(--grid-minor-y,40px);
+  background-position:
+    var(--grid-origin-x,50%) var(--grid-origin-y,50%),
+    var(--grid-origin-x,50%) var(--grid-origin-y,50%),
+    var(--grid-origin-x,50%) var(--grid-origin-y,50%),
+    var(--grid-origin-x,50%) var(--grid-origin-y,50%);
+}
+.canvasScene{
+  max-width:none;
+  max-height:none;
+}
+#terrace{
+  min-width:0!important;
+  min-height:0!important;
+  flex:none;
+}
+.polygonEditor{
+  overflow:visible;
+}
+main,.workspace,.canvasWrap,.canvasViewport{
+  min-width:0;
+}
+@media(max-width:1280px){
+  main{grid-template-columns:280px minmax(0,1fr)}
+}
