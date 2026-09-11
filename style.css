@@ -198,3 +198,334 @@ body.view3d .zoomControls{visibility:hidden}
   body.rightCollapsed main{grid-template-columns:290px minmax(0,1fr) 42px}
 }
 @media(max-width:1160px){.topNav{display:none}.appHeader{grid-template-columns:1fr auto}.result{display:none}main{grid-template-columns:285px minmax(0,1fr)}}
+
+/* =========================================================
+   NIMTECH DESIGN SYSTEM V2 — visible structural redesign
+   Apple / Ajax / Tesla / Pro-Digital inspired, own identity
+   ========================================================= */
+
+:root{
+  --v2-bg:#eef0f1;
+  --v2-card:#ffffff;
+  --v2-ink:#0a0c0d;
+  --v2-muted:#747b7f;
+  --v2-line:#e1e4e5;
+  --v2-dark:#0d0f10;
+  --v2-brand:#ad5b2d;
+  --v2-shadow:0 18px 48px rgba(15,18,20,.07);
+}
+
+/* App shell becomes card-based rather than three flat columns */
+body{background:var(--v2-bg)}
+.appHeader{
+  height:68px;
+  padding:0 24px;
+  grid-template-columns:340px 1fr auto;
+  background:rgba(247,248,248,.92);
+  border-bottom:0;
+  box-shadow:0 1px 0 rgba(12,15,17,.06);
+}
+.brandWordmark{grid-template-columns:42px 1fr;gap:12px}
+.brandLogoMark{width:38px;height:43px}
+.brandName{font-size:21px;letter-spacing:3.5px;font-weight:650}
+.brandTagline{font-size:5.8px;letter-spacing:.75px;color:#9a9fa2}
+.topNav{
+  padding:4px;
+  gap:3px;
+  border:1px solid #e2e5e6;
+  border-radius:11px;
+  background:rgba(255,255,255,.72);
+}
+.topNav a{
+  min-width:96px;
+  padding:9px 15px;
+  text-align:center;
+  border-radius:8px;
+  color:#848a8e;
+  transition:.16s ease;
+}
+.topNav a:first-child{
+  background:#fff;
+  color:#111;
+  box-shadow:0 3px 10px rgba(0,0,0,.05);
+}
+.topNav a:first-child:after{display:none}
+.topNav a:hover{background:#fff;color:#111}
+.headerCta{
+  height:40px;
+  border-radius:10px;
+  padding:0 18px;
+  box-shadow:0 8px 18px rgba(10,12,13,.12);
+}
+
+main{
+  height:calc(100vh - 68px);
+  grid-template-columns:352px minmax(0,1fr) 390px;
+  gap:12px;
+  padding:12px;
+  background:var(--v2-bg);
+}
+aside{
+  background:transparent;
+  border:0!important;
+  overflow:auto;
+}
+.settingsPanel,.result{padding:0;background:transparent}
+
+/* Left becomes stack of premium product cards */
+.settingsPanel .panelContent{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:0;
+}
+.setupSection{
+  position:relative;
+  grid-template-columns:30px 1fr;
+  gap:10px;
+  padding:17px 16px 18px;
+  margin:0;
+  border:1px solid rgba(220,224,225,.9)!important;
+  border-radius:14px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 8px 26px rgba(15,18,20,.035);
+}
+.setupSection+.setupSection{padding-top:17px}
+.stepNo{
+  width:25px;height:25px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+  background:#f0f2f2;
+  color:#7d8386;
+  font-size:9px;
+  font-weight:700;
+}
+.stepBody h2{
+  font-size:15px;
+  margin:3px 0 14px;
+  letter-spacing:-.4px;
+}
+.stepBody label{
+  margin-top:12px;
+  text-transform:none;
+  letter-spacing:0;
+}
+input,select{
+  height:44px;
+  border-radius:10px;
+  border:1px solid #e0e3e4;
+  background:#f7f8f8;
+  font-size:10.5px;
+}
+input:hover,select:hover{background:#fff}
+.secondaryBtn{
+  border-radius:10px;
+  height:40px;
+}
+.lengthOptions label{
+  height:38px;
+  border-radius:10px;
+  background:#f7f8f8;
+}
+.constructionFacts span{
+  border-radius:999px;
+  padding:6px 9px;
+  background:#f0f2f2;
+}
+#calc{
+  height:46px;
+  border-radius:11px;
+  box-shadow:0 10px 20px rgba(10,12,13,.13);
+}
+
+/* Workspace becomes a single hero instrument */
+.workspace{
+  border:1px solid #dde1e2;
+  border-radius:16px;
+  background:#e9ecec;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+}
+.workspaceTop{
+  left:20px;right:20px;top:18px;
+}
+.workspaceTop strong{
+  font-size:15px;
+  letter-spacing:-.45px;
+}
+.workspaceTop .eyebrow{
+  color:#8e9497;
+}
+.viewSwitch{
+  padding:4px;
+  border-radius:12px;
+  background:rgba(255,255,255,.9);
+  box-shadow:0 12px 26px rgba(12,15,17,.075);
+}
+.viewSwitch button{
+  width:56px;height:34px;border-radius:8px
+}
+
+/* Toolbar floats over the canvas instead of feeling like another row */
+.canvasWrap{
+  padding:72px 16px 14px;
+  gap:0;
+  justify-content:center;
+}
+.canvasToolbar{
+  position:relative;
+  z-index:20;
+  width:calc(100% - 28px);
+  max-width:none;
+  margin-bottom:-48px;
+  padding:8px 10px;
+  pointer-events:none;
+}
+.layerControls,.zoomControls{
+  pointer-events:auto;
+  border:1px solid rgba(219,223,224,.95);
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(18px);
+  border-radius:12px;
+  box-shadow:0 12px 26px rgba(12,15,17,.075);
+}
+.layerChip{height:34px;border-radius:8px}
+.zoomControls button{height:34px}
+
+/* CAD field more like a physical design surface */
+.canvasViewport{
+  width:100%;
+  max-width:none;
+  height:calc(100% - 32px);
+  min-height:520px;
+  border:0;
+  border-radius:14px;
+  background-color:#fdfdfc;
+  box-shadow:inset 0 0 0 1px rgba(211,215,216,.9),0 22px 52px rgba(15,18,20,.055);
+}
+.canvasViewport:after{
+  background:linear-gradient(to bottom,rgba(255,255,255,.22),transparent 18%,transparent 82%,rgba(236,238,238,.22));
+}
+#terrace{
+  border-color:#303537;
+  box-shadow:0 18px 44px rgba(22,26,28,.07);
+}
+.boardPiece{
+  box-shadow:inset 0 -1px 0 rgba(127,84,55,.58);
+}
+.joistLine,.joistLine.double{opacity:.72}
+.beltLine{opacity:.86}
+
+/* CAD handles = precision instrument, not generic SVG controls */
+.vertexHandle{
+  stroke-width:1.8;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.08));
+}
+.vertexHandle:hover{fill:#fff7f1;stroke:var(--v2-brand)}
+.addHandle{
+  fill:#fff;
+  stroke:var(--v2-brand);
+  filter:drop-shadow(0 2px 5px rgba(173,91,45,.14));
+}
+.edgeLabelBg{
+  fill:rgba(255,255,255,.985);
+  stroke:#d9ddde;
+}
+.edgeLabel{
+  fill:#0f1213;
+  font-weight:650;
+}
+
+/* Footer almost disappears */
+.canvasFooter{
+  width:calc(100% - 28px);
+  max-width:none;
+  margin-top:10px;
+}
+.legend{
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  padding:5px 2px;
+  color:#8c9295;
+}
+.canvasHint{color:#a2a7a9}
+
+/* Right rail = dashboard cards, not a long white column */
+.result .panelContent{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.rightSection,.specCard{
+  margin:0;
+  padding:16px;
+  border:1px solid rgba(220,224,225,.92);
+  border-radius:14px;
+  background:rgba(255,255,255,.97);
+  box-shadow:0 8px 26px rgba(15,18,20,.035);
+}
+.rightSection{border-bottom:1px solid rgba(220,224,225,.92)}
+.rightSectionHead h2{font-size:15px}
+.materialSwatches{gap:7px}
+.materialSwatch .swatch{
+  height:48px;
+  border-radius:9px;
+}
+.materialSwatch.active .swatch{
+  outline:2px solid #111;
+  outline-offset:2px;
+}
+.materialBoardPreview{
+  height:112px;
+  border-radius:11px;
+}
+.specCard{
+  padding:16px 16px 18px;
+}
+.panelHead h2{font-size:17px}
+.result p{
+  min-height:34px;
+  padding:8px 0;
+}
+.result p:first-of-type{
+  margin:4px -4px 8px;
+  padding:13px 10px;
+  border:0;
+  border-radius:10px;
+  background:#f4f5f5;
+}
+.result p:first-of-type b{
+  font-size:15px;
+  letter-spacing:-.3px;
+}
+.result h3{
+  margin-top:20px;
+}
+
+/* Collapse controls become floating hardware */
+.panelToggle{
+  top:10px;
+  width:30px;height:30px;
+  border-radius:10px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 8px 20px rgba(0,0,0,.06);
+}
+.leftToggle{right:8px}.rightToggle{left:8px}
+
+body.leftCollapsed main{grid-template-columns:44px minmax(0,1fr) 390px}
+body.rightCollapsed main{grid-template-columns:352px minmax(0,1fr) 44px}
+body.leftCollapsed.rightCollapsed main{grid-template-columns:44px minmax(0,1fr) 44px}
+body.leftCollapsed .settingsPanel,
+body.rightCollapsed .result{
+  background:rgba(255,255,255,.65);
+  border-radius:14px;
+}
+
+/* Responsive */
+@media(max-width:1400px){
+  main{grid-template-columns:312px minmax(0,1fr) 342px;gap:10px;padding:10px}
+  .appHeader{grid-template-columns:280px 1fr auto}
+  .topNav a{min-width:82px}
+  body.leftCollapsed main{grid-template-columns:44px minmax(0,1fr) 342px}
+  body.rightCollapsed main{grid-template-columns:312px minmax(0,1fr) 44px}
+}
