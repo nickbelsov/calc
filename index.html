@@ -119,7 +119,7 @@
         <select id="layoutMode">
           <option value="optimal">Оптимальный раскрой</option>
           <option value="aligned">Стыки в одну линию</option>
-          <option value="half">Шахматка 1/2</option>
+          <option value="half" selected>Равномерная шахматка 1/2</option>
           <option value="seamless">Без стыков</option>
           <option value="frame" disabled>Рамка по периметру — следующий этап</option>
           <option value="frameDivider" disabled>Рамка + разделительная доска — следующий этап</option>
@@ -280,6 +280,9 @@
 
   <div id="pileInfo" class="info"></div>
   <div id="tech"></div>
+
+  <h3>Диагностика алгоритма</h3>
+  <div id="algorithmDiagnostics" class="algorithmDiagnostics"></div>
     </div>
   </div>
 </aside>
