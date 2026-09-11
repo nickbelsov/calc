@@ -21,6 +21,129 @@ const layoutHints = {
 };
 
 let lastModel = null;
+let polygonPoints = [
+  {x:100,y:100},
+  {x:900,y:100},
+  {x:900,y:600},
+  {x:100,y:600}
+];
+let draggingVertex = -1;
+
+function polygonArea(points){
+  let sum=0;
+  for(let i=0;i<points.length;i++){
+    const a=points[i], b=points[(i+1)%points.length];
+    sum += a.x*b.y - b.x*a.y;
+  }
+  return Math.abs(sum)/2;
+}
+
+function polygonBounds(points){
+  const xs=points.map(p=>p.x), ys=points.map(p=>p.y);
+  return {
+    minX:Math.min(...xs), maxX:Math.max(...xs),
+    minY:Math.min(...ys), maxY:Math.max(...ys)
+  };
+}
+
+function svgToMm(point, bounds, L, W){
+  const bw=Math.max(1,bounds.maxX-bounds.minX);
+  const bh=Math.max(1,bounds.maxY-bounds.minY);
+  return {
+    x:(point.x-bounds.minX)/bw*L,
+    y:(point.y-bounds.minY)/bh*W
+  };
+}
+
+function getPolygonMetrics(){
+  const L=+$("L").value||6200;
+  const W=+$("W").value||3800;
+  const shapeMode=$("shapeMode").value;
+  const b=polygonBounds(polygonPoints);
+  const pxArea=polygonArea(polygonPoints);
+  const bw=Math.max(1,b.maxX-b.minX);
+  const bh=Math.max(1,b.maxY-b.minY);
+  return {
+    areaM2:(pxArea/(bw*bh))*(L*W)/1e6,
+    bboxL:L,
+    bboxW:W,
+    bounds:b
+  };
+}
+
+function renderPolygonEditor(){
+  const svg=$("polygonEditor");
+  if(!svg || $("shapeMode").value!=="free") return;
+  svg.innerHTML="";
+
+  const ns="http://www.w3.org/2000/svg";
+  const poly=document.createElementNS(ns,"polygon");
+  poly.setAttribute("points",polygonPoints.map(p=>p.x+","+p.y).join(" "));
+  poly.setAttribute("class","polygonFill");
+  svg.appendChild(poly);
+
+  const metrics=getPolygonMetrics();
+  const b=metrics.bounds;
+
+  polygonPoints.forEach((p,i)=>{
+    const next=polygonPoints[(i+1)%polygonPoints.length];
+
+    const mx=(p.x+next.x)/2, my=(p.y+next.y)/2;
+    const add=document.createElementNS(ns,"circle");
+    add.setAttribute("cx",mx); add.setAttribute("cy",my); add.setAttribute("r","13");
+    add.setAttribute("class","addHandle");
+    add.dataset.edge=i;
+    add.addEventListener("click",e=>{
+      e.stopPropagation();
+      polygonPoints.splice(i+1,0,{x:mx,y:my});
+      renderPolygonEditor();
+      calculate();
+    });
+    svg.appendChild(add);
+
+    const m1=svgToMm(p,b,metrics.bboxL,metrics.bboxW);
+    const m2=svgToMm(next,b,metrics.bboxL,metrics.bboxW);
+    const length=Math.hypot(m2.x-m1.x,m2.y-m1.y);
+    const label=document.createElementNS(ns,"text");
+    label.setAttribute("x",mx); label.setAttribute("y",my-20);
+    label.setAttribute("text-anchor","middle");
+    label.setAttribute("class","edgeLabel");
+    label.textContent=fmt(length)+" мм";
+    svg.appendChild(label);
+
+    const c=document.createElementNS(ns,"circle");
+    c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r","16");
+    c.setAttribute("class","vertexHandle");
+    c.dataset.vertex=i;
+    c.addEventListener("pointerdown",e=>{
+      draggingVertex=i;
+      c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener("pointermove",e=>{
+      if(draggingVertex!==i) return;
+      const pt=svg.createSVGPoint();
+      pt.x=e.clientX; pt.y=e.clientY;
+      const loc=pt.matrixTransform(svg.getScreenCTM().inverse());
+      polygonPoints[i]={
+        x:Math.max(20,Math.min(980,loc.x)),
+        y:Math.max(20,Math.min(680,loc.y))
+      };
+      renderPolygonEditor();
+      calculate();
+    });
+    c.addEventListener("pointerup",()=>{draggingVertex=-1;});
+    c.addEventListener("pointercancel",()=>{draggingVertex=-1;});
+    svg.appendChild(c);
+  });
+}
+
+function resetPolygon(){
+  polygonPoints=[
+    {x:100,y:100},{x:900,y:100},{x:900,y:600},{x:100,y:600}
+  ];
+  renderPolygonEditor();
+  calculate();
+}
 
 function getAllowedBoardLengths(){
   const values=[];
@@ -571,7 +694,9 @@ function calculate(){
 
   const totalPiles=beltLayout.count*pileLayout.count;
 
-  $("area").textContent=fmt(L*W/1e6,2)+" м²";
+  const shapeMetrics = shapeMode==="free" ? getPolygonMetrics() : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
+  $("area").textContent=fmt(shapeMetrics.areaM2,2)+" м²";
+  $("bboxOut").textContent=fmt(shapeMetrics.bboxL)+" × "+fmt(shapeMetrics.bboxW)+" мм";
   $("baseOut").textContent=baseNames[base];
   $("layoutModeOut").textContent=layoutNames[layoutMode];
   $("allowedLengthsOut").textContent=allowedLengths.length
@@ -579,8 +704,11 @@ function calculate(){
     : "не выбраны";
 
   const warning=$("layoutWarning");
-  warning.textContent=boardRows.warning||"";
-  warning.classList.toggle("hidden",!boardRows.warning);
+  const freeWarning = shapeMode==="free"
+    ? "Произвольный контур уже влияет на площадь и габариты. Раскладка доски, лаг, поясов и свай пока считается по габаритному прямоугольнику — точное отсечение по многоугольнику добавим следующим этапом."
+    : "";
+  warning.textContent=[boardRows.warning,freeWarning].filter(Boolean).join(" ");
+  warning.classList.toggle("hidden",!warning.textContent);
 
   $("rows").textContent=boardRows.rows.length ? rowCount+" шт." : "—";
   $("buy3000").textContent=(boardRows.purchases[3000]||0)+" шт.";
@@ -636,7 +764,7 @@ function calculate(){
 
   updateViewSize(L,W);
 
-  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base};
+  lastModel={run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode};
   setTimeout(()=>renderPlan(lastModel),0);
 }
 
@@ -647,13 +775,18 @@ function updateControls(){
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
+  const free=$("shapeMode").value==="free";
+  $("rectControls").classList.toggle("hidden",false);
+  $("freeControls").classList.toggle("hidden",!free);
+  $("polygonEditor").classList.toggle("hidden",!free);
+  if(free) setTimeout(renderPolygonEditor,0);
   const allowed=getAllowedBoardLengths();
   $("layoutHint").textContent=allowed.length
     ? (layoutHints[layoutMode]||"")
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","allow3000","allow4000","allow6000"].forEach(id=>{
+["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","allow3000","allow4000","allow6000"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
@@ -665,6 +798,7 @@ function updateControls(){
   $(id).addEventListener("change",()=>{if(lastModel)renderPlan(lastModel);});
 });
 
+$("resetPolygon")?.addEventListener("click",resetPolygon);
 $("calc").addEventListener("click",calculate);
 
 updateControls();
