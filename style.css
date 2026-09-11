@@ -37,3 +37,12 @@ p b{text-align:right}.rule{display:block;color:#606872}
 .lengthOptions{display:flex;gap:8px;margin-top:6px}
 .lengthOptions label{flex:1;margin:0;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border:1px solid #d7dce2;border-radius:7px;background:#fafbfc;color:#39414a}
 .lengthOptions input{width:auto}
+
+.secondaryBtn{background:#eef1f4;color:#30363d;margin-top:10px}
+.polygonEditor{position:absolute;inset:0;width:100%;height:100%;z-index:20;overflow:visible;touch-action:none}
+.polygonFill{fill:rgba(180,135,91,.30);stroke:#353b42;stroke-width:5;vector-effect:non-scaling-stroke}
+.vertexHandle{fill:#fff;stroke:#20262c;stroke-width:4;vector-effect:non-scaling-stroke;cursor:grab}
+.vertexHandle:active{cursor:grabbing}
+.addHandle{fill:#fff;stroke:#2b6cb0;stroke-width:3;vector-effect:non-scaling-stroke;cursor:pointer}
+.edgeLabel{font:28px Arial,sans-serif;fill:#1f2933;paint-order:stroke;stroke:#fff;stroke-width:8px;stroke-linejoin:round;pointer-events:none}
+.polygonHint{position:absolute;top:10px;left:10px;z-index:30;background:#fff;padding:6px 8px;border-radius:6px;font-size:11px;box-shadow:0 1px 5px #0002}
