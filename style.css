@@ -289,7 +289,8 @@ body.leftCollapsed main{grid-template-columns:38px minmax(600px,1fr) 350px}
 body.rightCollapsed main{grid-template-columns:300px minmax(600px,1fr) 38px}
 body.leftCollapsed.rightCollapsed main{grid-template-columns:38px minmax(600px,1fr) 38px}
 body.leftCollapsed .settingsPanel,body.rightCollapsed .result{padding:0;overflow:hidden}
-body.leftCollapsed .panelContent,body.rightCollapsed .panelContent{display:none}
+body.leftCollapsed .settingsPanel .panelContent{display:none}
+body.rightCollapsed .result .panelContent{display:none}
 body.leftCollapsed .leftToggle{left:6px;right:auto;transform:rotate(180deg)}
 body.rightCollapsed .rightToggle{left:6px;transform:rotate(180deg)}
 
