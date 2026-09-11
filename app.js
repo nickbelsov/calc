@@ -22,12 +22,13 @@ const layoutHints = {
 
 let lastModel = null;
 let polygonPoints = [
-  {x:100,y:100},{x:900,y:100},{x:900,y:600},{x:100,y:600}
+  {x:100,y:100},{x:720,y:100},{x:720,y:480},{x:100,y:480}
 ];
 let polygonClosed = true;
 let drawingPolygon = false;
 let draggingVertex = -1;
 const FREE_MM_PER_UNIT = 10;
+const FREE_DRAW_VIEWBOX = {x:0,y:0,w:5000,h:3500}; // 50 × 35 м при масштабе 10 мм/ед.
 
 function polygonArea(points){
   if(points.length<3) return 0;
@@ -97,7 +98,7 @@ function closePolygon(){
 
 function resetPolygon(){
   polygonPoints=[
-    {x:100,y:100},{x:900,y:100},{x:900,y:600},{x:100,y:600}
+    {x:100,y:100},{x:720,y:100},{x:720,y:480},{x:100,y:480}
   ];
   polygonClosed=true;
   drawingPolygon=false;
@@ -133,9 +134,26 @@ function applyPolygonToTerrace(){
   }
 }
 
+function updatePolygonEditorViewBox(svg){
+  if(drawingPolygon || polygonPoints.length<2){
+    const v=FREE_DRAW_VIEWBOX;
+    svg.setAttribute("viewBox",v.x+" "+v.y+" "+v.w+" "+v.h);
+    return;
+  }
+
+  const b=polygonBounds(polygonPoints);
+  const bw=Math.max(1,b.maxX-b.minX);
+  const bh=Math.max(1,b.maxY-b.minY);
+
+  // После замыкания рабочая область автоматически подстраивается
+  // под реальный контур. Габарит больше не связан с L/W.
+  svg.setAttribute("viewBox",b.minX+" "+b.minY+" "+bw+" "+bh);
+}
+
 function renderPolygonEditor(){
   const svg=$("polygonEditor");
   if(!svg || $("shapeMode").value!=="free") return;
+  updatePolygonEditorViewBox(svg);
   applyPolygonToTerrace();
   svg.innerHTML="";
   svg.classList.toggle("drawing",drawingPolygon);
@@ -151,6 +169,10 @@ function renderPolygonEditor(){
 
   const metrics=getPolygonMetrics();
   const b=metrics.bounds;
+  const visualSpan=Math.max(1,b.maxX-b.minX,b.maxY-b.minY);
+  const handleR=Math.max(8,visualSpan*0.018);
+  const addR=Math.max(7,visualSpan*0.013);
+  const labelOffset=Math.max(18,visualSpan*0.028);
   const edgeCount=polygonClosed?polygonPoints.length:Math.max(0,polygonPoints.length-1);
 
   for(let i=0;i<edgeCount;i++){
@@ -160,7 +182,7 @@ function renderPolygonEditor(){
 
     if(polygonClosed){
       const add=document.createElementNS(ns,"circle");
-      add.setAttribute("cx",mx); add.setAttribute("cy",my); add.setAttribute("r","13");
+      add.setAttribute("cx",mx); add.setAttribute("cy",my); add.setAttribute("r",String(addR));
       add.setAttribute("class","addHandle");
       add.addEventListener("click",e=>{
         e.stopPropagation();
@@ -174,7 +196,7 @@ function renderPolygonEditor(){
     if(polygonClosed){
       const length=Math.hypot(next.x-p.x,next.y-p.y)*FREE_MM_PER_UNIT;
       const label=document.createElementNS(ns,"text");
-      label.setAttribute("x",mx); label.setAttribute("y",my-20);
+      label.setAttribute("x",mx); label.setAttribute("y",my-labelOffset);
       label.setAttribute("text-anchor","middle");
       label.setAttribute("class","edgeLabel");
       label.textContent=fmt(length)+" мм";
@@ -199,7 +221,7 @@ function renderPolygonEditor(){
 
   polygonPoints.forEach((p,i)=>{
     const c=document.createElementNS(ns,"circle");
-    c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r",i===0&&drawingPolygon&&polygonPoints.length>=3?"20":"16");
+    c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r",String(i===0&&drawingPolygon&&polygonPoints.length>=3?handleR*1.25:handleR));
     c.setAttribute("class","vertexHandle"+(i===0&&drawingPolygon&&polygonPoints.length>=3?" closeTarget":""));
 
     if(i===0&&drawingPolygon&&polygonPoints.length>=3){
