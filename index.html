@@ -27,7 +27,11 @@
 
   <label>Расчётный модуль доски, мм</label>
   <input id="boardModule" type="number" value="150" min="50">
-  <small>Временно вручную. Позже значение будет браться из выбранной модели ДПК.</small>
+  <small>Временно вручную. Позже значение будет браться из номенклатуры.</small>
+
+  <label>Высота доски, мм</label>
+  <input id="boardHeight" type="number" value="23" min="1">
+  <small>До 23 мм включительно — шаг лаг 300 мм; от 24 мм — 400 мм по осям.</small>
 
   <h3>Тип основания</h3>
   <select id="base">
@@ -37,15 +41,10 @@
   </select>
 
   <div id="ground">
-    <label>Максимальный шаг лаг 40×40×2, мм</label>
-    <input id="step" type="number" min="300" max="400" value="350">
-
-    <label>Шаг опорного пояса 80×80×2, мм</label>
-    <input id="beltStep" type="number" min="500" value="1500">
-    <small>Пока тестовый параметр — точное правило для пояса ещё утверждаем.</small>
-
-    <label>Предпочтительный шаг свай, мм</label>
-    <input id="pileTarget" type="number" min="1000" max="2000" value="1500">
+    <p class="rule">Сваи под основной каркас: 2500 мм</p>
+    <p class="rule">Сваи под крыльцо: 2000 мм</p>
+    <p class="rule">Шаг свай: 1000–1500 мм</p>
+    <p class="rule">Крайний отступ: не менее 400 мм</p>
   </div>
 
   <div id="concrete" class="hidden">
@@ -83,14 +82,20 @@
   <p>Схема ряда <b id="boardPlan">—</b></p>
   <p>Отход до повторного использования <b id="boardWaste">—</b></p>
   <p>Стыков <b id="seams">—</b></p>
-  <p>Свес у стыка <b>100–150 мм</b></p>
 
-  <h3>Подконструкция</h3>
-  <p>Обычные лаги 40×40×2 <b id="regularJoists">—</b></p>
-  <p>Сдвоенные лаги под стыками <b id="doubleJoists">—</b></p>
-  <p>Всего 40×40×2 <b id="joists">—</b></p>
-  <p>Пояс 80×80×2 <b id="belt">—</b></p>
-  <p>Опоры / сваи <b id="supports">—</b></p>
+  <h3>Лаги 40×40×2</h3>
+  <p>Расчётный шаг по осям <b id="joistStepOut">—</b></p>
+  <p>Обычные лаги <b id="regularJoists">—</b></p>
+  <p>Сдвоенные под стыками <b id="doubleJoists">—</b></p>
+  <p>Фактический погонаж <b id="joists">—</b></p>
+  <p>Закупка по 6 м <b id="joistPurchase">—</b></p>
+
+  <h3>Опорный пояс 80×80×2</h3>
+  <p>Статус расчёта <b id="belt">Ждёт правила шага поясов</b></p>
+  <p>Закупка по 6 м <b id="beltPurchase">—</b></p>
+
+  <h3>Опоры / сваи</h3>
+  <p>Расстановка <b id="supports">—</b></p>
 
   <div id="pileInfo" class="info"></div>
   <div id="tech"></div>
