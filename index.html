@@ -126,6 +126,21 @@
         </select>
         <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
 
+        <div class="warehouseCard">
+          <div class="warehouseHead">
+            <div>
+              <span class="warehouseEyebrow">СКЛАД NIMTECH</span>
+              <strong>Учитывать реальные остатки</strong>
+            </div>
+            <label class="switch"><input id="useWarehouse" type="checkbox"><span></span></label>
+          </div>
+
+          <label>Позиция для расчёта</label>
+          <select id="warehouseProduct"></select>
+          <div id="warehouseStatus" class="warehouseStatus">Тестовый режим. Остатки загружаются локально.</div>
+          <div id="warehouseLengths" class="warehouseLengths"></div>
+        </div>
+
         <label>Разрешённые длины доски</label>
         <div class="lengthOptions">
           <label><input id="allow3000" type="checkbox" checked> 3 м</label>
@@ -230,6 +245,9 @@
   <p>Макс. шаг 80×80×2 <b id="checkBeltStep">—</b></p>
   <p>Макс. шаг свай <b id="checkPileStep">—</b></p>
 
+  <h3>Склад</h3>
+  <div id="stockCheck" class="stockCheck">Складской режим выключен.</div>
+
   <h3>Раскладка ДПК</h3>
   <p>Доступные длины <b id="allowedLengthsOut">—</b></p>
   <p>Рядов доски <b id="rows">—</b></p>
@@ -268,6 +286,7 @@
 </main>
 
 <script src="config.js"></script>
+<script src="inventory-adapter.js"></script>
 <script src="app.js"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
