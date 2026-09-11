@@ -809,6 +809,56 @@ function polygonScanlineSegments(axisValue,direction,L,W){
   return segments;
 }
 
+function polygonCrosslineSegments(runPosition,direction,L,W){
+  if(!polygonClosed||polygonPoints.length<3) return [];
+  const b=polygonBounds(polygonPoints);
+
+  // Линия профиля 40×40 перпендикулярна доске:
+  // при direction=l фиксируем X и получаем участки по Y;
+  // при direction=w фиксируем Y и получаем участки по X.
+  const fixed=direction==="l"
+    ? b.minX+runPosition
+    : b.minY+runPosition;
+
+  const hits=[];
+  for(let i=0;i<polygonPoints.length;i++){
+    const p=polygonPoints[i],q=polygonPoints[(i+1)%polygonPoints.length];
+
+    if(direction==="l"){
+      if((p.x<=fixed&&q.x>fixed)||(q.x<=fixed&&p.x>fixed)){
+        const t=(fixed-p.x)/(q.x-p.x);
+        hits.push(p.y+t*(q.y-p.y));
+      }
+    }else{
+      if((p.y<=fixed&&q.y>fixed)||(q.y<=fixed&&p.y>fixed)){
+        const t=(fixed-p.y)/(q.y-p.y);
+        hits.push(p.x+t*(q.x-p.x));
+      }
+    }
+  }
+
+  hits.sort((x,y)=>x-y);
+  const segments=[];
+  for(let i=0;i+1<hits.length;i+=2){
+    const start=hits[i],end=hits[i+1];
+    if(end-start<0.5) continue;
+    segments.push({
+      start:direction==="l"?start-b.minY:start-b.minX,
+      length:end-start
+    });
+  }
+  return segments;
+}
+
+function polygonJoistMeters(positions,direction,L,W){
+  let total=0;
+  for(const p of positions){
+    const spans=polygonCrosslineSegments(p,direction,L,W);
+    total+=spans.reduce((sum,s)=>sum+s.length,0)/1000;
+  }
+  return total;
+}
+
 function mergePurchases(target,source){
   [3000,4000,6000].forEach(k=>target[k]=(target[k]||0)+(source[k]||0));
 }
@@ -1092,7 +1142,9 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
   const houseAtStart=houseAtAxisStart(direction,houseSide,"run");
 
   for(const beltPos of beltPositions){
-    const spans=polygonScanlineSegments(beltPos,direction,L,W);
+    const across=direction==="l"?W:L;
+    const scanPos=Math.min(across-0.001,Math.max(0.001,beltPos));
+    const spans=polygonScanlineSegments(scanPos,direction,L,W);
     const segments=[];
 
     for(const span of spans){
@@ -1436,7 +1488,8 @@ function buildAlgorithmDiagnostics(model){
     text:"Шаг по осям не более "+joistStepByBoardHeight(+$("boardHeight").value||23)+
       " мм. Обычных линий: "+joists.regular.length+
       ", линий под стыками: "+joists.seam.length+
-      ". Фактический максимальный шаг: "+fmt(joists.actualMaxStep)+" мм."
+      ". Фактический максимальный шаг: "+fmt(joists.actualMaxStep)+" мм."+
+      (shapeMode==="free"?" Метраж считается по фактическим участкам внутри контура.":"")
   });
 
   lines.push({
@@ -1534,8 +1587,12 @@ function calculate(){
   const joists=buildJoists(run,allSeams,joistStep);
 
   const joistLengthM=across/1000;
-  const regularJoistMeters=joists.regular.length*joistLengthM;
-  const seamJoistMeters=joists.seam.length*joistLengthM;
+  const regularJoistMeters=shapeMode==="free"&&polygonClosed
+    ? polygonJoistMeters(joists.regular,direction,L,W)
+    : joists.regular.length*joistLengthM;
+  const seamJoistMeters=shapeMode==="free"&&polygonClosed
+    ? polygonJoistMeters(joists.seam,direction,L,W)
+    : joists.seam.length*joistLengthM;
   const totalJoistMeters=regularJoistMeters+seamJoistMeters;
   const joistBuy=stockPurchase(totalJoistMeters);
 
@@ -1687,7 +1744,7 @@ function calculate(){
 
   lastModel={
     run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns,polygonStructure,
-    totalJoistMeters,beltMeters,totalPiles,
+    totalJoistMeters,regularJoistMeters,seamJoistMeters,beltMeters,totalPiles,
     algorithmVersion:CONFIG.algorithmVersion
   };
   renderAlgorithmDiagnostics(lastModel);
