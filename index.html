@@ -14,6 +14,8 @@
 
 <main>
 <aside class="settingsPanel">
+  <button id="toggleLeft" class="panelToggle leftToggle" type="button" title="Свернуть параметры" aria-label="Свернуть параметры">‹</button>
+  <div class="panelContent">
   <div class="panelHead"><span class="eyebrow">ПРОЕКТИРОВАНИЕ</span><h2>Параметры террасы</h2></div>
 
   <label>Форма площадки</label>
@@ -104,6 +106,7 @@
   </div>
 
   <button id="calc">Рассчитать</button>
+  </div>
 </aside>
 
 <section class="workspace">
@@ -134,6 +137,8 @@
 </section>
 
 <aside class="result">
+  <button id="toggleRight" class="panelToggle rightToggle" type="button" title="Свернуть расчёт" aria-label="Свернуть расчёт">›</button>
+  <div class="panelContent">
   <div class="panelHead"><span class="eyebrow">СПЕЦИФИКАЦИЯ</span><h2>Расчёт проекта</h2></div>
   <p>Площадь <b id="area"></b></p>
   <p>Габарит контура <b id="bboxOut">—</b></p>
@@ -174,6 +179,7 @@
 
   <div id="pileInfo" class="info"></div>
   <div id="tech"></div>
+  </div>
 </aside>
 </main>
 
