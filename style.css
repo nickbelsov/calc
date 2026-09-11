@@ -304,3 +304,84 @@ body.view3d .zoomControls{visibility:hidden}
   main{grid-template-columns:280px minmax(560px,1fr)}
   .result{display:none}
 }
+
+/* Product-ready toolbar + engineering plan pass */
+.layerControls{gap:4px}
+.layerChip{
+  position:relative;
+  height:30px;
+  padding:0 9px!important;
+  border:1px solid transparent;
+  background:transparent;
+  border-radius:7px!important;
+  cursor:pointer;
+  user-select:none;
+}
+.layerChip input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+.layerChip:has(input:checked){
+  background:#f2f2ef!important;
+  border-color:#e6e7e3;
+  color:#252829!important;
+}
+.layerSwatch{
+  width:15px;height:3px;border-radius:3px;display:inline-block;flex:0 0 auto
+}
+.layerSwatch.dot{width:8px;height:8px;border-radius:50%}
+.boardLayer .layerSwatch{background:var(--board)}
+.joistLayer .layerSwatch{background:var(--joist)}
+.beltLayer .layerSwatch{background:var(--belt)}
+.pileLayer .layerSwatch{background:var(--pile)}
+.zoomControls .iconBtn{
+  display:flex;align-items:center;justify-content:center;
+  width:30px;min-width:30px;padding:0
+}
+.zoomControls .iconBtn svg{
+  width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round
+}
+.zoomControls .zoomValue{min-width:48px;font-variant-numeric:tabular-nums;color:#474c4f}
+.zoomControls .fitBtn{margin-left:2px}
+.canvasFooter{
+  width:min(1000px,100%);
+  display:flex;align-items:center;justify-content:space-between;gap:12px
+}
+.canvasHint{
+  font-size:8.5px;color:#a1a5a7;white-space:nowrap
+}
+.engineeringDimension{
+  position:absolute;z-index:12;pointer-events:none;color:#4e5559;
+  font-size:10px;font-weight:600;font-variant-numeric:tabular-nums
+}
+.engineeringDimension.x{
+  left:8%;right:8%;top:8px;height:18px;text-align:center;
+  border-top:1px solid rgba(45,50,53,.48)
+}
+.engineeringDimension.x:before,.engineeringDimension.x:after{
+  content:"";position:absolute;top:-4px;width:1px;height:8px;background:rgba(45,50,53,.48)
+}
+.engineeringDimension.x:before{left:0}.engineeringDimension.x:after{right:0}
+.engineeringDimension.y{
+  top:8%;bottom:8%;left:8px;width:18px;
+  border-left:1px solid rgba(45,50,53,.48);
+  display:flex;align-items:center;justify-content:center
+}
+.engineeringDimension.y:before,.engineeringDimension.y:after{
+  content:"";position:absolute;left:-4px;width:8px;height:1px;background:rgba(45,50,53,.48)
+}
+.engineeringDimension.y:before{top:0}.engineeringDimension.y:after{bottom:0}
+.engineeringDimension.y span{
+  transform:rotate(-90deg);white-space:nowrap;
+  background:rgba(255,255,255,.72);padding:1px 4px;border-radius:3px
+}
+.engineeringDimension.x span{
+  position:relative;top:-8px;background:rgba(255,255,255,.78);padding:1px 5px;border-radius:3px
+}
+.planCornerMark{
+  position:absolute;right:8px;bottom:8px;z-index:11;
+  padding:4px 6px;border-radius:4px;background:rgba(255,255,255,.78);
+  color:#858a8d;font-size:8px;letter-spacing:.45px;pointer-events:none
+}
