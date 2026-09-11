@@ -23,109 +23,127 @@
   </a>
   <span class="plannerTitle">Планировщик террасы</span>
 </div>
-  <div class="headerMeta"><span class="statusDot"></span><span>Проект сохраняется в браузере</span></div>
+  <nav class="topNav">
+    <a href="#project">Проект</a>
+    <a href="#materials">Материалы</a>
+    <a href="#spec">Ведомость</a>
+  </nav>
+  <button class="headerCta" type="button" onclick="document.getElementById('calc').click()">Получить расчёт <span>→</span></button>
 </header>
 
 <main>
 <aside class="settingsPanel">
   <button id="toggleLeft" class="panelToggle leftToggle" type="button" title="Свернуть параметры" aria-label="Свернуть параметры">‹</button>
-  <div class="panelContent">
-  <div class="panelHead"><span class="eyebrow">ПРОЕКТИРОВАНИЕ</span><h2>Параметры террасы</h2></div>
+  <div class="panelContent" id="project">
+    <div class="setupSection">
+      <div class="stepNo">01</div>
+      <div class="stepBody">
+        <h2>Объект</h2>
+        <label>Форма площадки</label>
+        <select id="shapeMode">
+          <option value="rect">Прямоугольник</option>
+          <option value="free">Произвольный контур</option>
+        </select>
+      </div>
+    </div>
 
-  <label>Форма площадки</label>
-  <select id="shapeMode">
-    <option value="rect">Прямоугольник</option>
-    <option value="free">Произвольный контур</option>
-  </select>
+    <div class="setupSection">
+      <div class="stepNo">02</div>
+      <div class="stepBody">
+        <h2>Размеры</h2>
+        <div id="rectControls" class="sizeGrid">
+          <div><label>Длина, мм</label><input id="L" type="number" value="6200" min="1000"></div>
+          <div><label>Ширина, мм</label><input id="W" type="number" value="3800" min="1000"></div>
+        </div>
+        <div id="freeControls" class="hidden">
+          <small>Перетаскивай точки на плане. «+» добавляет вершину, размер ребра редактируется кликом.</small>
+          <button id="drawPolygon" type="button" class="secondaryBtn">Нарисовать заново</button>
+          <button id="resetPolygon" type="button" class="secondaryBtn">Прямоугольный контур</button>
+        </div>
+        <label>Направление доски</label>
+        <select id="dir">
+          <option value="l">По длине</option>
+          <option value="w">По ширине</option>
+        </select>
+      </div>
+    </div>
 
-  <div id="rectControls">
-    <label>Длина, мм</label>
-    <input id="L" type="number" value="6200" min="1000">
+    <div class="setupSection">
+      <div class="stepNo">03</div>
+      <div class="stepBody">
+        <h2>Конструкция</h2>
+        <label>Тип основания</label>
+        <select id="base">
+          <option value="ground">Грунт / земля</option>
+          <option value="concrete">Бетон</option>
+          <option value="roof">Кровля / гидроизоляция</option>
+        </select>
 
-    <label>Ширина, мм</label>
-    <input id="W" type="number" value="3800" min="1000">
-  </div>
+        <div id="ground" class="constructionFacts">
+          <span>Сваи 2500 мм</span>
+          <span>Пояс ≤ 1500 мм</span>
+          <span>Шаг свай ≤ 1500 мм</span>
+        </div>
 
-  <div id="freeControls" class="hidden">
-    <small>Перетаскивай точки на плане. Нажми «+» на ребре, чтобы добавить вершину. Нажми на размер ребра, чтобы ввести точное значение.</small>
-    <button id="drawPolygon" type="button" class="secondaryBtn">Нарисовать заново</button>
-    <button id="resetPolygon" type="button" class="secondaryBtn">Прямоугольный контур</button>
-  </div>
+        <div id="concrete" class="hidden">
+          <label>Тип опоры</label>
+          <select id="concreteSupport">
+            <option>Резиновые подкладки</option>
+            <option>Арматурные штыри</option>
+            <option>Регулируемые пластиковые опоры</option>
+          </select>
+        </div>
 
-  <label>Направление доски</label>
-  <select id="dir">
-    <option value="l">По длине</option>
-    <option value="w">По ширине</option>
-  </select>
+        <label class="checkrow"><input id="hasHouse" type="checkbox"> Примыкание к дому</label>
+        <div id="houseControls" class="hidden">
+          <label>Сторона примыкания</label>
+          <select id="houseSide">
+            <option value="top">Верхняя сторона</option>
+            <option value="bottom">Нижняя сторона</option>
+            <option value="left">Левая сторона</option>
+            <option value="right">Правая сторона</option>
+          </select>
+        </div>
+      </div>
+    </div>
 
-  <label>Вариант раскладки</label>
-  <select id="layoutMode">
-    <option value="optimal">Оптимальный раскрой</option>
-    <option value="aligned">Стыки в одну линию</option>
-    <option value="half">Шахматка 1/2</option>
-    <option value="seamless">Без стыков</option>
-    <option value="frame" disabled>Рамка по периметру — следующий этап</option>
-    <option value="frameDivider" disabled>Рамка + разделительная доска — следующий этап</option>
-  </select>
-  <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
+    <div class="setupSection" id="materials">
+      <div class="stepNo">04</div>
+      <div class="stepBody">
+        <h2>Материалы</h2>
 
-  <label>Разрешённые длины доски</label>
-  <div class="lengthOptions">
-    <label><input id="allow3000" type="checkbox" checked> 3 м</label>
-    <label><input id="allow4000" type="checkbox" checked> 4 м</label>
-    <label><input id="allow6000" type="checkbox" checked> 6 м</label>
-  </div>
-  <small>Расчёт использует только выбранные длины. Позже этот список будет формироваться автоматически по остаткам склада.</small>
+        <label>Вариант раскладки</label>
+        <select id="layoutMode">
+          <option value="optimal">Оптимальный раскрой</option>
+          <option value="aligned">Стыки в одну линию</option>
+          <option value="half">Шахматка 1/2</option>
+          <option value="seamless">Без стыков</option>
+          <option value="frame" disabled>Рамка по периметру — следующий этап</option>
+          <option value="frameDivider" disabled>Рамка + разделительная доска — следующий этап</option>
+        </select>
+        <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
 
-  <label>Расчётный модуль доски, мм</label>
-  <input id="boardModule" type="number" value="150" min="50">
+        <label>Разрешённые длины доски</label>
+        <div class="lengthOptions">
+          <label><input id="allow3000" type="checkbox" checked> 3 м</label>
+          <label><input id="allow4000" type="checkbox" checked> 4 м</label>
+          <label><input id="allow6000" type="checkbox" checked> 6 м</label>
+        </div>
 
-  <label>Высота доски, мм</label>
-  <input id="boardHeight" type="number" value="23" min="1">
-  <small>До 23 мм — шаг лаг 300 мм; от 24 мм — 400 мм по осям.</small>
+        <div class="sizeGrid compactGrid">
+          <div><label>Модуль, мм</label><input id="boardModule" type="number" value="150" min="50"></div>
+          <div><label>Высота, мм</label><input id="boardHeight" type="number" value="23" min="1"></div>
+        </div>
 
-  <h3>Примыкание к дому</h3>
-  <label class="checkrow"><input id="hasHouse" type="checkbox"> Терраса примыкает к дому</label>
-  <div id="houseControls" class="hidden">
-    <label>Сторона примыкания</label>
-    <select id="houseSide">
-      <option value="top">Верхняя сторона</option>
-      <option value="bottom">Нижняя сторона</option>
-      <option value="left">Левая сторона</option>
-      <option value="right">Правая сторона</option>
-    </select>
-  </div>
-
-  <h3>Тип основания</h3>
-  <select id="base">
-    <option value="ground">Грунт / земля</option>
-    <option value="concrete">Бетон</option>
-    <option value="roof">Кровля / гидроизоляция</option>
-  </select>
-
-  <div id="ground">
-    <p class="rule">Сваи под основной каркас: 2500 мм</p>
-    <p class="rule">Сваи под крыльцо: 2000 мм</p>
-    <p class="rule">Максимальный шаг свай: 1500 мм</p>
-    <p class="rule">Максимальный шаг пояса 80×80: 1500 мм</p>
-  </div>
-
-  <div id="concrete" class="hidden">
-    <label>Тип опоры</label>
-    <select id="concreteSupport">
-      <option>Резиновые подкладки</option>
-      <option>Арматурные штыри</option>
-      <option>Регулируемые пластиковые опоры</option>
-    </select>
-  </div>
-
-  <button id="calc">Рассчитать</button>
-  </div>
+        <button id="calc">Рассчитать</button>
+      </div>
+    </div>
+  </div>  </div>
 </aside>
 
 <section class="workspace">
   <div class="workspaceTop">
-    <div><span class="eyebrow">РАБОЧАЯ ОБЛАСТЬ</span><strong>План террасы</strong></div>
+    <div><span class="eyebrow">NIMTECH PLANNER</span><strong>Рабочая сцена</strong></div>
     <div class="viewSwitch">
       <button id="view2D" type="button" class="active">2D</button>
       <button id="view3D" type="button">3D</button>
@@ -178,8 +196,24 @@
 
 <aside class="result">
   <button id="toggleRight" class="panelToggle rightToggle" type="button" title="Свернуть расчёт" aria-label="Свернуть расчёт">›</button>
-  <div class="panelContent">
-  <div class="panelHead"><span class="eyebrow">СПЕЦИФИКАЦИЯ</span><h2>Расчёт проекта</h2></div>
+  <div class="panelContent" id="spec">
+    <div class="rightSection">
+      <div class="rightSectionHead"><h2>Материалы</h2><span>Смотреть все →</span></div>
+      <div class="materialSwatches">
+        <button class="materialSwatch active"><i class="swatch sw1"></i><span>Венге</span></button>
+        <button class="materialSwatch"><i class="swatch sw2"></i><span>Терракот</span></button>
+        <button class="materialSwatch"><i class="swatch sw3"></i><span>Серый</span></button>
+        <button class="materialSwatch"><i class="swatch sw4"></i><span>Дуб</span></button>
+        <button class="materialSwatch"><i class="swatch sw5"></i><span>Графит</span></button>
+      </div>
+      <div class="materialHero">
+        <div class="materialBoardPreview"></div>
+        <div><strong>Венге</strong><span>ДПК NIMTECH</span></div>
+      </div>
+    </div>
+
+    <div class="specCard">
+      <div class="panelHead"><span class="eyebrow">ИТОГОВАЯ ВЕДОМОСТЬ</span><h2>Расчёт проекта</h2></div>
   <p>Площадь <b id="area"></b></p>
   <p>Габарит контура <b id="bboxOut">—</b></p>
   <p>Основание <b id="baseOut"></b></p>
@@ -225,6 +259,7 @@
 
   <div id="pileInfo" class="info"></div>
   <div id="tech"></div>
+    </div>
   </div>
 </aside>
 </main>
