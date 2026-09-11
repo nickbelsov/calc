@@ -22,6 +22,25 @@ const layoutHints = {
 
 let lastModel = null;
 
+function getAllowedBoardLengths(){
+  const values=[];
+  if($("allow3000")?.checked) values.push(3000);
+  if($("allow4000")?.checked) values.push(4000);
+  if($("allow6000")?.checked) values.push(6000);
+  return values;
+}
+
+function emptyBoardResult(message){
+  return {
+    rows:[],
+    purchases:{3000:0,4000:0,6000:0},
+    reusedPieces:0,
+    finalWaste:0,
+    offcuts:[],
+    warning:message || "Не выбрана ни одна доступная длина доски."
+  };
+}
+
 function fmt(n, digits = 0) {
   return Number(n).toLocaleString("ru-RU", {
     minimumFractionDigits: digits,
@@ -67,8 +86,9 @@ function equalLayoutWithHouseOffset(length, maxSpacing, houseOffset, houseAtStar
   return { intervals, count: positions.length, step, positions, houseOffsetApplied: true, houseOffset };
 }
 
-function chooseStockForRemaining(remaining) {
-  const sorted = [...CONFIG.boardLengths].sort((a,b)=>a-b);
+function chooseStockForRemaining(remaining, allowedLengths) {
+  const sorted = [...allowedLengths].sort((a,b)=>a-b);
+  if(!sorted.length) return null;
   return sorted.find(x=>x>=remaining) || sorted[sorted.length-1];
 }
 
@@ -91,10 +111,11 @@ function makeRowFromLengths(lengths, reusedFlags = []) {
   return {pieces,seams};
 }
 
-function chooseAlignedPattern(runLength) {
-  const lengths=[...CONFIG.boardLengths].sort((a,b)=>a-b);
+function chooseAlignedPattern(runLength, allowedLengths) {
+  const lengths=[...allowedLengths].sort((a,b)=>a-b);
   let best=null;
-  const maxPieces=Math.ceil(runLength/3000)+2;
+  if(!lengths.length) return null;
+  const maxPieces=Math.ceil(runLength/Math.min(...lengths))+2;
 
   function walk(combo,sum,depth){
     if(sum>=runLength){
@@ -118,8 +139,9 @@ function chooseAlignedPattern(runLength) {
   return {...best,actual};
 }
 
-function buildRowsAligned(runLength,rowCount){
-  const pattern=chooseAlignedPattern(runLength);
+function buildRowsAligned(runLength,rowCount,allowedLengths){
+  const pattern=chooseAlignedPattern(runLength,allowedLengths);
+  if(!pattern) return emptyBoardResult();
   const purchases={3000:0,4000:0,6000:0};
 
   pattern.combo.forEach(stock=>{
@@ -137,16 +159,21 @@ function buildRowsAligned(runLength,rowCount){
   };
 }
 
-function buildRowsSeamless(runLength,rowCount){
+function buildRowsSeamless(runLength,rowCount,allowedLengths){
   const purchases={3000:0,4000:0,6000:0};
 
   if(runLength>6000){
-    const fallback=buildRowsOptimal(runLength,rowCount);
+    const fallback=buildRowsOptimal(runLength,rowCount,allowedLengths);
     fallback.warning="Режим «Без стыков» невозможен: длина ряда больше 6000 мм. Временно показан оптимальный раскрой.";
     return fallback;
   }
 
-  const stock=chooseStockForRemaining(runLength);
+  const stock=chooseStockForRemaining(runLength,allowedLengths);
+  if(!stock || stock<runLength) {
+    const fallback=buildRowsOptimal(runLength,rowCount,allowedLengths);
+    fallback.warning="Режим «Без стыков» невозможен с выбранными длинами доски.";
+    return fallback;
+  }
   purchases[stock]=rowCount;
   const waste=(stock-runLength)*rowCount;
   const rows=Array.from({length:rowCount},()=>makeRowFromLengths([runLength]));
@@ -154,7 +181,7 @@ function buildRowsSeamless(runLength,rowCount){
   return {rows,purchases,reusedPieces:0,finalWaste:waste,offcuts:[],warning:""};
 }
 
-function packPiecesIntoStock(pieceLengths){
+function packPiecesIntoStock(pieceLengths,allowedLengths){
   const purchases={3000:0,4000:0,6000:0};
   const bins=[];
   let reusedPieces=0;
@@ -181,7 +208,8 @@ function packPiecesIntoStock(pieceLengths){
       continue;
     }
 
-    const stock=chooseStockForRemaining(piece);
+    const stock=chooseStockForRemaining(piece,allowedLengths);
+    if(!stock) return emptyBoardResult();
     addPurchase(purchases,stock);
     bins.push({stock,remaining:stock-piece});
   }
@@ -196,7 +224,7 @@ function packPiecesIntoStock(pieceLengths){
   };
 }
 
-function buildRowsHalf(runLength,rowCount){
+function buildRowsHalf(runLength,rowCount,allowedLengths){
   const rows=[];
   const allPieceLengths=[];
 
@@ -214,7 +242,7 @@ function buildRowsHalf(runLength,rowCount){
 
   // Закупку под геометрическую шахматку считаем отдельно:
   // детали упаковываются в доступные доски 3/4/6 м с повторным использованием остатков.
-  const packed=packPiecesIntoStock(allPieceLengths);
+  const packed=packPiecesIntoStock(allPieceLengths,allowedLengths);
 
   return {
     rows,
@@ -240,7 +268,7 @@ function takeBestOffcut(offcuts,remaining){
   return bestIndex;
 }
 
-function buildRowsOptimal(runLength,rowCount){
+function buildRowsOptimal(runLength,rowCount,allowedLengths){
   const offcuts=[];
   const purchases={3000:0,4000:0,6000:0};
   const rows=[];
@@ -269,7 +297,8 @@ function buildRowsOptimal(runLength,rowCount){
 
       if(usedFromOffcut) continue;
 
-      const stock=chooseStockForRemaining(remaining);
+      const stock=chooseStockForRemaining(remaining,allowedLengths);
+      if(!stock) return emptyBoardResult();
       addPurchase(purchases,stock);
       const used=Math.min(stock,remaining);
       pieces.push({length:used,sourceLength:stock,reused:false});
@@ -299,11 +328,12 @@ function buildRowsOptimal(runLength,rowCount){
   };
 }
 
-function buildBoardRows(runLength,rowCount,mode){
-  if(mode==="aligned") return buildRowsAligned(runLength,rowCount);
-  if(mode==="half") return buildRowsHalf(runLength,rowCount);
-  if(mode==="seamless") return buildRowsSeamless(runLength,rowCount);
-  return buildRowsOptimal(runLength,rowCount);
+function buildBoardRows(runLength,rowCount,mode,allowedLengths){
+  if(!allowedLengths.length) return emptyBoardResult();
+  if(mode==="aligned") return buildRowsAligned(runLength,rowCount,allowedLengths);
+  if(mode==="half") return buildRowsHalf(runLength,rowCount,allowedLengths);
+  if(mode==="seamless") return buildRowsSeamless(runLength,rowCount,allowedLengths);
+  return buildRowsOptimal(runLength,rowCount,allowedLengths);
 }
 
 function uniquePositions(values,tolerance=2){
@@ -504,15 +534,16 @@ function calculate(){
   const boardHeight=+$("boardHeight").value||23;
   const hasHouse=$("hasHouse").checked;
   const houseSide=$("houseSide").value;
+  const allowedLengths=getAllowedBoardLengths();
 
   const run=direction==="l"?L:W;
   const across=direction==="l"?W:L;
 
   const joistStep=joistStepByBoardHeight(boardHeight);
   const rowCount=Math.ceil(across/boardModule);
-  const boardRows=buildBoardRows(run,rowCount,layoutMode);
+  const boardRows=buildBoardRows(run,rowCount,layoutMode,allowedLengths);
 
-  const allSeams=uniquePositions(boardRows.rows.flatMap(r=>r.seams));
+  const allSeams=uniquePositions((boardRows.rows||[]).flatMap(r=>r.seams));
   const joists=buildJoists(run,allSeams,joistStep);
 
   const joistLengthM=across/1000;
@@ -543,12 +574,15 @@ function calculate(){
   $("area").textContent=fmt(L*W/1e6,2)+" м²";
   $("baseOut").textContent=baseNames[base];
   $("layoutModeOut").textContent=layoutNames[layoutMode];
+  $("allowedLengthsOut").textContent=allowedLengths.length
+    ? allowedLengths.map(x=>x/1000+" м").join(" / ")
+    : "не выбраны";
 
   const warning=$("layoutWarning");
   warning.textContent=boardRows.warning||"";
   warning.classList.toggle("hidden",!boardRows.warning);
 
-  $("rows").textContent=rowCount+" шт.";
+  $("rows").textContent=boardRows.rows.length ? rowCount+" шт." : "—";
   $("buy3000").textContent=(boardRows.purchases[3000]||0)+" шт.";
   $("buy4000").textContent=(boardRows.purchases[4000]||0)+" шт.";
   $("buy6000").textContent=(boardRows.purchases[6000]||0)+" шт.";
@@ -613,10 +647,13 @@ function updateControls(){
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
-  $("layoutHint").textContent=layoutHints[layoutMode]||"";
+  const allowed=getAllowedBoardLengths();
+  $("layoutHint").textContent=allowed.length
+    ? (layoutHints[layoutMode]||"")
+    : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide"].forEach(id=>{
+["L","W","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","allow3000","allow4000","allow6000"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
