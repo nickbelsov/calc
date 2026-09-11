@@ -15,7 +15,8 @@ const CONFIG = {
   },
 
   belt: {
-    size: "80×80×2"
+    size: "80×80×2",
+    maxSpacing: 1500
   },
 
   metal: {
@@ -25,9 +26,7 @@ const CONFIG = {
   ground: {
     pileLength: 2500,
     porchPileLength: 2000,
-    pileSpacingMin: 1000,
-    pileSpacingMax: 1500,
-    minEdge: 400
+    pileSpacingMax: 1500
   },
 
   overhang: {
