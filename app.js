@@ -1294,3 +1294,112 @@ $("toggleRight")?.addEventListener("click",()=>{
 if(localStorage.getItem("nimtechLeftCollapsed")==="1") document.body.classList.add("leftCollapsed");
 if(localStorage.getItem("nimtechRightCollapsed")==="1") document.body.classList.add("rightCollapsed");
 updatePanelToggleTitles();
+
+let viewScale=1;
+let viewX=0;
+let viewY=0;
+let isPanning=false;
+let panStart={x:0,y:0,vx:0,vy:0};
+let spaceDown=false;
+
+function applyCanvasTransform(){
+  const scene=$("canvasScene");
+  if(!scene) return;
+  scene.style.transform="translate("+viewX+"px,"+viewY+"px) scale("+viewScale+")";
+  const zr=$("zoomReset");
+  if(zr) zr.textContent=Math.round(viewScale*100)+"%";
+}
+
+function resetCanvasView(){
+  viewScale=1;
+  viewX=0;
+  viewY=0;
+  applyCanvasTransform();
+}
+
+function fitCanvasView(){
+  const vp=$("canvasViewport");
+  const terrace=$("terrace");
+  if(!vp||!terrace) return;
+  const pad=50;
+  const sx=(vp.clientWidth-pad*2)/Math.max(1,terrace.offsetWidth);
+  const sy=(vp.clientHeight-pad*2)/Math.max(1,terrace.offsetHeight);
+  viewScale=Math.max(.25,Math.min(2.5,Math.min(sx,sy)));
+  viewX=0;
+  viewY=0;
+  applyCanvasTransform();
+}
+
+function setCanvasZoom(nextScale,anchorClientX=null,anchorClientY=null){
+  const vp=$("canvasViewport");
+  if(!vp) return;
+  const old=viewScale;
+  nextScale=Math.max(.25,Math.min(4,nextScale));
+  if(nextScale===old) return;
+
+  const rect=vp.getBoundingClientRect();
+  const ax=(anchorClientX??(rect.left+rect.width/2))-rect.left-rect.width/2;
+  const ay=(anchorClientY??(rect.top+rect.height/2))-rect.top-rect.height/2;
+
+  const sceneX=(ax-viewX)/old;
+  const sceneY=(ay-viewY)/old;
+
+  viewScale=nextScale;
+  viewX=ax-sceneX*viewScale;
+  viewY=ay-sceneY*viewScale;
+  applyCanvasTransform();
+}
+
+$("zoomIn")?.addEventListener("click",()=>setCanvasZoom(viewScale*1.15));
+$("zoomOut")?.addEventListener("click",()=>setCanvasZoom(viewScale/1.15));
+$("zoomReset")?.addEventListener("click",resetCanvasView);
+$("zoomFit")?.addEventListener("click",fitCanvasView);
+
+$("canvasViewport")?.addEventListener("wheel",e=>{
+  e.preventDefault();
+  const factor=e.deltaY<0?1.1:1/1.1;
+  setCanvasZoom(viewScale*factor,e.clientX,e.clientY);
+},{passive:false});
+
+$("canvasViewport")?.addEventListener("pointerdown",e=>{
+  const panAllowed=e.button===1 || spaceDown;
+  if(!panAllowed) return;
+  e.preventDefault();
+  isPanning=true;
+  panStart={x:e.clientX,y:e.clientY,vx:viewX,vy:viewY};
+  $("canvasViewport").classList.add("panning");
+  $("canvasViewport").setPointerCapture(e.pointerId);
+});
+
+$("canvasViewport")?.addEventListener("pointermove",e=>{
+  if(!isPanning) return;
+  viewX=panStart.vx+(e.clientX-panStart.x);
+  viewY=panStart.vy+(e.clientY-panStart.y);
+  applyCanvasTransform();
+});
+
+function endPan(e){
+  if(!isPanning) return;
+  isPanning=false;
+  $("canvasViewport")?.classList.remove("panning");
+  try{if($("canvasViewport")?.hasPointerCapture(e.pointerId)) $("canvasViewport").releasePointerCapture(e.pointerId);}catch(_){}
+}
+$("canvasViewport")?.addEventListener("pointerup",endPan);
+$("canvasViewport")?.addEventListener("pointercancel",endPan);
+
+window.addEventListener("keydown",e=>{
+  if(e.code==="Space" && !["INPUT","SELECT","TEXTAREA"].includes(document.activeElement?.tagName)){
+    spaceDown=true;
+    document.body.classList.add("spacePan");
+    e.preventDefault();
+  }
+});
+window.addEventListener("keyup",e=>{
+  if(e.code==="Space"){
+    spaceDown=false;
+    document.body.classList.remove("spacePan");
+  }
+});
+
+window.addEventListener("resize",()=>setTimeout(fitCanvasView,80));
+setTimeout(fitCanvasView,150);
