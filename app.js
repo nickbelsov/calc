@@ -437,6 +437,93 @@ function equalLayout(length, maxSpacing) {
   return { intervals, count: intervals + 1, step, positions, houseOffsetApplied: false };
 }
 
+function supportLineLayout(length,maxSpacing,maxCantilever=200){
+  if(length<=0) return {positions:[],count:0,intervals:0,step:0,edgeStart:0,edgeEnd:0};
+
+  if(length<=maxCantilever*2){
+    return {
+      positions:[length/2],
+      count:1,
+      intervals:0,
+      step:0,
+      edgeStart:length/2,
+      edgeEnd:length/2
+    };
+  }
+
+  const start=maxCantilever;
+  const end=length-maxCantilever;
+  const span=end-start;
+  const intervals=Math.max(1,Math.ceil(span/maxSpacing));
+  const step=span/intervals;
+  const positions=[];
+
+  for(let i=0;i<=intervals;i++) positions.push(start+i*step);
+
+  return {
+    positions,
+    count:positions.length,
+    intervals,
+    step,
+    edgeStart:start,
+    edgeEnd:length-end
+  };
+}
+
+function endpointPileLayout(length,maxSpacing){
+  // Сваи обязаны стоять на обоих концах физического участка 80×80,
+  // промежуточные распределяются равномерно.
+  return equalLayout(length,maxSpacing);
+}
+
+function sharedZoneBoundaryBelts(zones){
+  const out=[];
+  const tol=1;
+
+  for(let i=0;i<zones.length;i++){
+    for(let j=i+1;j<zones.length;j++){
+      const a=zones[i],b=zones[j];
+
+      // Горизонтальная общая граница.
+      if(Math.abs((a.y+a.h)-b.y)<=tol || Math.abs((b.y+b.h)-a.y)<=tol){
+        const y=Math.abs((a.y+a.h)-b.y)<=tol ? b.y : a.y;
+        const start=Math.max(a.x,b.x);
+        const end=Math.min(a.x+a.w,b.x+b.w);
+        if(end-start>tol){
+          out.push({
+            orientation:"h",
+            axis:y,
+            start,
+            end,
+            zoneId:a.id+"+"+b.id,
+            pileLength:Math.max(a.pileLength||0,b.pileLength||0)||CONFIG.ground.pileLength,
+            reason:"shared-zone-boundary"
+          });
+        }
+      }
+
+      // Вертикальная общая граница.
+      if(Math.abs((a.x+a.w)-b.x)<=tol || Math.abs((b.x+b.w)-a.x)<=tol){
+        const x=Math.abs((a.x+a.w)-b.x)<=tol ? b.x : a.x;
+        const start=Math.max(a.y,b.y);
+        const end=Math.min(a.y+a.h,b.y+b.h);
+        if(end-start>tol){
+          out.push({
+            orientation:"v",
+            axis:x,
+            start,
+            end,
+            zoneId:a.id+"+"+b.id,
+            pileLength:Math.max(a.pileLength||0,b.pileLength||0)||CONFIG.ground.pileLength,
+            reason:"shared-zone-boundary"
+          });
+        }
+      }
+    }
+  }
+  return out;
+}
+
 function equalLayoutWithHouseOffset(length, maxSpacing, houseOffset, houseAtStart) {
   if (length <= houseOffset) return equalLayout(length, maxSpacing);
   const remaining = length - houseOffset;
@@ -1155,14 +1242,7 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     const segments=[];
 
     for(const span of spans){
-      let layout=pileAffected
-        ? equalLayoutWithHouseOffset(
-            span.length,
-            CONFIG.ground.pileSpacingMax,
-            CONFIG.ground.houseOffset,
-            houseAtStart
-          )
-        : equalLayout(span.length,CONFIG.ground.pileSpacingMax);
+      const layout=endpointPileLayout(span.length,CONFIG.ground.pileSpacingMax);
 
       const piles=layout.positions.map(p=>span.start+p);
 
@@ -1404,8 +1484,12 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
       .map(x=>x-runOrigin);
 
     const joists=buildJoists(run,localSeams,joistStep);
-    const beltLayout=equalLayout(across,CONFIG.belt.maxSpacing);
-    const pileLayout=equalLayout(run,CONFIG.ground.pileSpacingMax);
+    const beltLayout=supportLineLayout(
+      across,
+      CONFIG.belt.maxSpacing,
+      CONFIG.joist.maxEdgeCantilever
+    );
+    const pileLayout=endpointPileLayout(run,CONFIG.ground.pileSpacingMax);
 
     const makeJoistSegment=(pos,type)=>{
       if(direction==="l"){
@@ -1419,9 +1503,9 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
 
     for(const pos of beltLayout.positions){
       if(direction==="l"){
-        beltSegments.push({orientation:"h",axis:zone.y+pos,start:zone.x,end:zone.x+zone.w,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength});
+        beltSegments.push({orientation:"h",axis:zone.y+pos,start:zone.x,end:zone.x+zone.w,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength,reason:"joist-support"});
       }else{
-        beltSegments.push({orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength});
+        beltSegments.push({orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength,reason:"joist-support"});
       }
     }
 
@@ -1434,13 +1518,15 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
     });
   }
 
+  beltSegments.push(...sharedZoneBoundaryBelts(zones));
+
   const mergedBelts=mergeCollinearSegments(beltSegments);
   const pileSteps=[];
 
   if(base==="ground"){
     for(const seg of mergedBelts){
       const length=seg.end-seg.start;
-      const layout=equalLayout(length,CONFIG.ground.pileSpacingMax);
+      const layout=endpointPileLayout(length,CONFIG.ground.pileSpacingMax);
       pileSteps.push(layout.step||0);
 
       for(const p of layout.positions){
@@ -1735,16 +1821,16 @@ function buildAlgorithmDiagnostics(model){
   lines.push({
     title:"80×80×2",
     text:model.zonedStructure
-      ? model.zonedStructure.zones.map(z=>z.name+": "+z.beltLayout.count+" ряда, шаг "+fmt(z.beltLayout.step)+" мм").join(" | ")+
-        ". Предел "+CONFIG.belt.maxSpacing+" мм."
+      ? model.zonedStructure.zones.map(z=>
+          z.name+": "+z.beltLayout.count+" ряда, шаг "+fmt(z.beltLayout.step)+" мм, свес лаг "+
+          fmt(z.beltLayout.edgeStart)+" / "+fmt(z.beltLayout.edgeEnd)+" мм"
+        ).join(" | ")+". Предел шага "+CONFIG.belt.maxSpacing+" мм; свес лаг ≤ "+CONFIG.joist.maxEdgeCantilever+" мм."
       : "Рядов: "+beltLayout.count+
         ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
   });
 
   if(base==="ground" && pileLayout){
-    const houseException=pileLayout.houseOffsetApplied
-      ? " Со стороны дома действует отдельный отступ "+CONFIG.ground.houseOffset+" мм."
-      : "";
+    const houseException="";
     lines.push({
       title:"Сваи",
       text:"На один пояс: "+pileLayout.count+
@@ -1849,9 +1935,11 @@ function calculate(){
   const totalSeams=boardRows.rows.reduce((sum,row)=>sum+row.seams.length,0);
 
   const beltAffected=hasHouse && houseAffectsAxis(direction,houseSide,"across");
-  const beltLayout=beltAffected
-    ? equalLayoutWithHouseOffset(across,CONFIG.belt.maxSpacing,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"across"))
-    : equalLayout(across,CONFIG.belt.maxSpacing);
+  const beltLayout=supportLineLayout(
+    across,
+    CONFIG.belt.maxSpacing,
+    CONFIG.joist.maxEdgeCantilever
+  );
 
   let polygonStructure=null;
   let beltMeters=0;
@@ -1869,9 +1957,7 @@ function calculate(){
     beltMeters=beltLayout.count*beltLengthM;
 
     const pileAffected=hasHouse && houseAffectsAxis(direction,houseSide,"run");
-    pileLayout=pileAffected
-      ? equalLayoutWithHouseOffset(run,CONFIG.ground.pileSpacingMax,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"run"))
-      : equalLayout(run,CONFIG.ground.pileSpacingMax);
+    pileLayout=endpointPileLayout(run,CONFIG.ground.pileSpacingMax);
 
     totalPiles=beltLayout.count*pileLayout.count;
   }
@@ -1897,7 +1983,7 @@ function calculate(){
     ? "Замкните контур кликом по первой точке — после этого начнётся расчёт раскладки внутри формы."
     : shapeMode==="free"
       ? (layoutMode==="half"
-          ? "Шахматка привязана к самому длинному непрерывному ряду: чётные ряды имеют один шов по центру, нечётные — швы на 1/4 и 3/4. Эти три оси профиля 40×40×2 проходят через всю площадку. Пояс 80×80 и сваи уже обрезаются по реальному контуру."
+          ? "Шахматка привязана к самому длинному непрерывному ряду. 80×80×2 строится по фактическим концам лаг 40×40×2: свес ≤200 мм, внутренний шаг ≤1500 мм. Сваи ставятся на концах каждого участка 80×80 и далее равномерно ≤1500 мм."
           : "Для произвольной формы оси стыков берутся по самому длинному непрерывному ряду и протягиваются через всю площадку. Пояс 80×80 и сваи уже обрезаются по реальному контуру.")
       : "";
   warning.textContent=[boardRows.warning,freeWarning].filter(Boolean).join(" ");
@@ -1936,10 +2022,8 @@ function calculate(){
     ? zonedStructure.zones.map(z=>z.name+": "+z.beltLayout.count).join(" / ")
     : beltLayout.count+" шт.";
   $("beltStepOut").textContent=zonedStructure
-    ? "до "+fmt(zonedStructure.maxBeltStep)+" мм по зонам"
-    : (beltLayout.houseOffsetApplied
-        ? "400 мм от дома, далее ≈ "+fmt(beltLayout.step)+" мм"
-        : fmt(beltLayout.step)+" мм");
+    ? "до "+fmt(zonedStructure.maxBeltStep)+" мм; крайние ≤200 мм"
+    : "до "+fmt(beltLayout.step)+" мм; свес "+fmt(beltLayout.edgeStart)+" / "+fmt(beltLayout.edgeEnd)+" мм";
   $("belt").textContent=fmt(beltMeters,1)+" м.п.";
   $("beltPurchase").textContent=beltBuy.sticks+" хлыстов / "+fmt(beltBuy.meters)+" м";
 
@@ -1953,7 +2037,7 @@ function calculate(){
       $("checkPileStep").textContent=fmt(zonedStructure.maxPileStep)+" / 1500 мм";
       $("supports").textContent=parts.join(" + ");
       $("pileInfo").textContent=
-        "Конструкция разделена на зоны. Основная терраса и крыльцо получают собственные пояса и опоры; совпадающие элементы на общей границе объединяются.";
+        "80×80×2 строится как несущая система под 40×40×2: крайняя линия не дальше 200 мм от конца лаги, внутренний шаг ≤1500 мм. Сваи стоят на концах каждого физического участка 80×80×2 и равномерно между ними с шагом ≤1500 мм. На общей границе террасы и крыльца добавлен отдельный несущий профиль.";
     }else if(shapeMode==="free" && polygonStructure){
       $("pilesPerBelt").textContent="по фактическим участкам";
       $("pileStepOut").textContent=polygonStructure.maxPileStep
@@ -1971,9 +2055,7 @@ function calculate(){
           : "");
     }else{
       $("pilesPerBelt").textContent=pileLayout.count+" шт.";
-      $("pileStepOut").textContent=pileLayout.houseOffsetApplied
-        ? "400 мм от дома, далее ≈ "+fmt(pileLayout.step)+" мм"
-        : fmt(pileLayout.step)+" мм";
+      $("pileStepOut").textContent=fmt(pileLayout.step)+" мм";
       $("checkPileStep").textContent=fmt(pileLayout.step)+" / 1500 мм";
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
@@ -2011,7 +2093,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,
-    algorithmVersion:CONFIG.algorithmVersion
+    algorithmVersion:"2.1"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
