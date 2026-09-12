@@ -610,3 +610,180 @@ body.rightCollapsed .result{
   stroke-width:2.2;
   vector-effect:non-scaling-stroke;
 }
+
+/* =========================================================
+   NIMTECH CAD — constructor drawing visual language
+   Based on real working schemes: restrained, technical,
+   high-contrast hierarchy of construction layers.
+   ========================================================= */
+
+:root{
+  --board:#b79a86;
+  --joist:#637f91;
+  --belt:#c87558;
+  --pile:#8c9397;
+  --cad-contour:#22272a;
+  --cad-paper:#ffffff;
+  --cad-grid-major:rgba(91,103,111,.085);
+  --cad-grid-minor:rgba(91,103,111,.032);
+}
+
+/* Paper / grid */
+.canvasViewport{
+  background-color:var(--cad-paper)!important;
+  background-image:
+    linear-gradient(var(--cad-grid-major) 1px,transparent 1px),
+    linear-gradient(90deg,var(--cad-grid-major) 1px,transparent 1px),
+    linear-gradient(var(--cad-grid-minor) 1px,transparent 1px),
+    linear-gradient(90deg,var(--cad-grid-minor) 1px,transparent 1px)!important;
+  box-shadow:
+    inset 0 0 0 1px #dfe2e3,
+    0 12px 28px rgba(18,22,24,.035)!important;
+}
+.canvasViewport:after{display:none!important}
+#terrace,
+#terrace.freeShape{
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+/* Board rows — thin warm working lines */
+.boardPiece{
+  z-index:0!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:inset 0 -1px 0 rgba(166,132,108,.62)!important;
+  opacity:.78;
+}
+.boardPiece.alt{
+  background:transparent!important;
+}
+
+/* 40×40×2 — blue-grey, same style everywhere incl. double joist */
+.joistLine,
+.joistLine.double{
+  z-index:4!important;
+  background:#627f91!important;
+  opacity:.92!important;
+  box-shadow:none!important;
+}
+
+/* 80×80×2 — warm terracotta structural line */
+.beltLine{
+  z-index:3!important;
+  background:#c87558!important;
+  opacity:.96!important;
+  box-shadow:none!important;
+}
+.perimeterSupportSvg{
+  stroke:#c87558!important;
+  stroke-width:6!important;
+  stroke-linecap:butt!important;
+  stroke-linejoin:miter!important;
+  opacity:.98!important;
+  vector-effect:non-scaling-stroke;
+}
+
+/* Piles — full grey engineering points */
+.pileDot{
+  z-index:7!important;
+  width:7px!important;
+  height:7px!important;
+  border:1.5px solid #fff!important;
+  border-radius:50%!important;
+  background:#899196!important;
+  box-shadow:0 0 0 1px #899196!important;
+  transform:translate(-50%,-50%)!important;
+}
+
+/* Main contour — strict black technical outline */
+.polygonFill{
+  fill:rgba(255,255,255,.001)!important;
+  stroke:var(--cad-contour)!important;
+  stroke-width:2!important;
+  vector-effect:non-scaling-stroke;
+}
+.openPolyline{
+  fill:none!important;
+  stroke:var(--cad-contour)!important;
+  stroke-width:2!important;
+  vector-effect:non-scaling-stroke;
+}
+
+/* Dimensions — like working construction sheets */
+.edgeLabelBg{
+  fill:#fff!important;
+  stroke:#d9dddf!important;
+  stroke-width:1!important;
+  opacity:.98!important;
+}
+.edgeLabel{
+  fill:#202426!important;
+  stroke:#fff!important;
+  stroke-width:4px!important;
+  paint-order:stroke!important;
+  font-family:Arial,Helvetica,sans-serif!important;
+  font-weight:700!important;
+  letter-spacing:0!important;
+}
+.engineeringDimension{
+  color:#202426!important;
+  font-family:Arial,Helvetica,sans-serif!important;
+  font-weight:700!important;
+}
+.engineeringDimension.x,
+.engineeringDimension.y{
+  border-color:#555d61!important;
+}
+.engineeringDimension.x:before,
+.engineeringDimension.x:after,
+.engineeringDimension.y:before,
+.engineeringDimension.y:after{
+  background:#555d61!important;
+}
+.engineeringDimension.x span,
+.engineeringDimension.y span{
+  background:#fff!important;
+  border:0!important;
+  border-radius:2px!important;
+  box-shadow:none!important;
+  color:#202426!important;
+}
+
+/* Editing points remain functional but visually secondary */
+.vertexHandle{
+  fill:#fff!important;
+  stroke:#ba6843!important;
+  stroke-width:1.5!important;
+  filter:none!important;
+}
+.vertexHandle:hover{
+  fill:#fff8f3!important;
+  stroke:#a95633!important;
+}
+.addHandle{
+  fill:#fff!important;
+  stroke:#ba6843!important;
+  stroke-width:1.5!important;
+  filter:none!important;
+}
+
+/* Zones: subdued drafting notation */
+.zoneOutline{
+  border:1px dashed rgba(55,63,67,.18)!important;
+}
+.zoneOutline span{
+  border:0!important;
+  background:rgba(255,255,255,.88)!important;
+  color:#777f83!important;
+  box-shadow:none!important;
+}
+.zoneOutline.zone-porch{
+  border-color:rgba(200,117,88,.3)!important;
+}
+
+/* Legend must exactly match the drawing */
+.boardKey,.boardLayer .layerSwatch{background:#b79a86!important}
+.regularJoistKey,.joistLayer .layerSwatch{background:#627f91!important}
+.beltKey,.beltLayer .layerSwatch{background:#c87558!important}
+.pileKey,.pileLayer .layerSwatch{background:#899196!important}
