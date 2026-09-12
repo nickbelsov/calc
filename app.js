@@ -456,6 +456,83 @@ function equalLayout(length, maxSpacing) {
   return { intervals, count: intervals + 1, step, positions, houseOffsetApplied: false };
 }
 
+function engineeringAreaLoadNmm2(){
+  const e=CONFIG.engineering;
+  const totalKgM2=
+    e.designLiveLoadKgM2 +
+    e.deckingDeadLoadKgM2*e.deckingDeadLoadFactor;
+  // 1 kPa = 0.001 N/mm²
+  return totalKgM2*e.gravity/1e6;
+}
+
+function sectionSpanLimit(section,tributaryWidthMm){
+  const e=CONFIG.engineering;
+  const qArea=engineeringAreaLoadNmm2();
+  const qLine=qArea*Math.max(1,tributaryWidthMm);
+  const E=e.elasticModulusMPa;
+  const Ry=e.steelRyMPa;
+  const I=section.I_mm4;
+  const W=section.W_mm3;
+  const ratio=e.deflectionRatio;
+
+  const uniformStrength=Math.sqrt((8*Ry*W)/qLine);
+  const uniformDeflection=Math.cbrt((384*E*I)/(5*qLine*ratio));
+
+  const P=e.terracePointLoadKN*1000*e.terracePointLoadFactor;
+  const pointStrength=(4*Ry*W)/P;
+  const pointDeflection=Math.sqrt((48*E*I)/(P*ratio));
+
+  const governing=Math.min(
+    uniformStrength,
+    uniformDeflection,
+    pointStrength,
+    pointDeflection
+  );
+
+  return {
+    qLine,
+    uniformStrength,
+    uniformDeflection,
+    pointStrength,
+    pointDeflection,
+    governing
+  };
+}
+
+function terraceStructuralLimits(joistStepMm){
+  const e=CONFIG.engineering;
+  const joist=sectionSpanLimit(
+    e.sections.joist40x40x2,
+    joistStepMm
+  );
+
+  const joistSupportMax=Math.min(
+    CONFIG.belt.maxSpacing,
+    Math.floor(joist.governing/10)*10
+  );
+
+  // Для 80×80 берём максимально неблагоприятную полосу нагрузки,
+  // равную расстоянию между соседними поясами.
+  const belt=sectionSpanLimit(
+    e.sections.belt80x80x2,
+    Math.max(1,joistSupportMax)
+  );
+
+  const pileSpacingMax=Math.min(
+    CONFIG.ground.pileSpacingMax,
+    Math.floor(belt.governing/10)*10
+  );
+
+  return {
+    qAreaNmm2:engineeringAreaLoadNmm2(),
+    qAreaKPa:engineeringAreaLoadNmm2()*1000,
+    joist,
+    belt,
+    joistSupportMax,
+    pileSpacingMax
+  };
+}
+
 function supportLineLayout(length,maxSpacing,maxCantilever=200){
   if(length<=0) return {positions:[],count:0,intervals:0,step:0,edgeStart:0,edgeEnd:0};
 
@@ -1470,7 +1547,8 @@ function addArbitrarySegment(parent,seg,L,W,cls){
   parent.appendChild(el);
 }
 
-function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide){
+function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide,structuralLimits=null){
+  const limits=structuralLimits||terraceStructuralLimits(CONFIG.joist.stepByBoardHeight.thinStep);
   const belts=[];
   let beltMeters=0;
   const pileSteps=[];
@@ -1483,7 +1561,7 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     const segments=[];
 
     for(const span of spans){
-      const layout=endpointPileLayout(span.length,CONFIG.ground.pileSpacingMax);
+      const layout=endpointPileLayout(span.length,limits.pileSpacingMax);
       const piles=layout.positions.map(p=>span.start+p);
 
       segments.push({
@@ -1515,7 +1593,7 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
 
   const angledPilePoints=perimeterPilePoints(
     angledSupportSegments,
-    CONFIG.ground.pileSpacingMax,
+    limits.pileSpacingMax,
     CONFIG.ground.pileLength
   );
 
@@ -1559,12 +1637,12 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     maxPilesPerBelt:Math.max(
       0,
       ...belts.flatMap(b=>b.segments.map(s=>s.piles.length)),
-      ...angledSupportSegments.map(s=>endpointPileLayout(s.length,CONFIG.ground.pileSpacingMax).count)
+      ...angledSupportSegments.map(s=>endpointPileLayout(s.length,limits.pileSpacingMax).count)
     ),
     minPileStep:pileSteps.length?Math.min(...pileSteps):0,
     maxPileStep:Math.max(
       pileSteps.length?Math.max(...pileSteps):0,
-      ...angledSupportSegments.map(s=>endpointPileLayout(s.length,CONFIG.ground.pileSpacingMax).step||0)
+      ...angledSupportSegments.map(s=>endpointPileLayout(s.length,limits.pileSpacingMax).step||0)
     ),
     maxAngledLagOverhang:angledSupportSegments.length
       ? Math.max(...angledSupportSegments.map(s=>s.lagOverhang||0))
@@ -1828,8 +1906,9 @@ function supportFrameTieBelts(zone,direction,beltLayout,hasHouse,houseSide){
   return out;
 }
 
-function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHouse=false,houseSide="top"){
+function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHouse=false,houseSide="top",structuralLimits=null){
   if(!zones?.length) return null;
+  const limits=structuralLimits||terraceStructuralLimits(joistStep);
 
   const zoneModels=[];
   const joistSegments=[];
@@ -1850,10 +1929,10 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHous
     const joists=buildJoists(run,localSeams,joistStep);
     const beltLayout=supportLineLayout(
       across,
-      CONFIG.belt.maxSpacing,
+      limits.joistSupportMax,
       CONFIG.joist.maxEdgeCantilever
     );
-    const pileLayout=endpointPileLayout(run,CONFIG.ground.pileSpacingMax);
+    const pileLayout=endpointPileLayout(run,limits.pileSpacingMax);
 
     const makeJoistSegment=(pos,type)=>{
       if(direction==="l"){
@@ -1892,7 +1971,7 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHous
   if(base==="ground"){
     for(const seg of mergedBelts){
       const length=seg.end-seg.start;
-      const layout=endpointPileLayout(length,CONFIG.ground.pileSpacingMax);
+      const layout=endpointPileLayout(length,limits.pileSpacingMax);
       pileSteps.push(layout.step||0);
 
       for(const p of layout.positions){
@@ -2141,6 +2220,25 @@ function buildAlgorithmDiagnostics(model){
     });
   }
 
+  if(model.structuralLimits){
+    const sl=model.structuralLimits;
+    lines.push({
+      title:"Расчётная нагрузка",
+      text:"Равномерная нагрузка "+fmt(sl.qAreaKPa,2)+" кПа (500 кг/м² эксплуатационная + до 25 кг/м² ДПК с коэффициентом 1,10). "+
+        "Сталь: Ry 230 МПа, E 200 ГПа. Критерий прогиба L/"+CONFIG.engineering.deflectionRatio+"."
+    });
+    lines.push({
+      title:"Допустимый пролёт 40×40×2",
+      text:"По расчёту: "+fmt(sl.joist.governing)+" мм; в модели принимаем не более "+
+        fmt(sl.joistSupportMax)+" мм между поясами 80×80×2."
+    });
+    lines.push({
+      title:"Допустимый пролёт 80×80×2",
+      text:"По расчёту: "+fmt(sl.belt.governing)+" мм; шаг свай ограничиваем "+
+        fmt(sl.pileSpacingMax)+" мм."
+    });
+  }
+
   lines.push({
     title:"ДПК",
     text:"Закупочные длины: "+getAllowedBoardLengths().map(x=>x/1000+" м").join(" / ")+
@@ -2199,7 +2297,7 @@ function buildAlgorithmDiagnostics(model){
       ? model.zonedStructure.zones.map(z=>
           z.name+": "+z.beltLayout.count+" ряда, шаг "+fmt(z.beltLayout.step)+" мм, свес лаг "+
           fmt(z.beltLayout.edgeStart)+" / "+fmt(z.beltLayout.edgeEnd)+" мм"
-        ).join(" | ")+". Предел шага "+CONFIG.belt.maxSpacing+" мм; свес лаг ≤ "+CONFIG.joist.maxEdgeCantilever+" мм. Свободные торцы несущих линий связаны поперечным 80×80×2; со стороны примыкания к дому замыкающий профиль не добавляется."
+        ).join(" | ")+". Расчётный предел шага "+fmt(model.structuralLimits?.joistSupportMax||CONFIG.belt.maxSpacing)+" мм; свес лаг ≤ "+CONFIG.joist.maxEdgeCantilever+" мм. Свободные торцы несущих линий связаны поперечным 80×80×2; со стороны примыкания к дому замыкающий профиль не добавляется."
       : "Рядов: "+beltLayout.count+
         ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
   });
@@ -2266,6 +2364,7 @@ function calculate(){
   const across=direction==="l"?W:L;
 
   const joistStep=joistStepByBoardHeight(boardHeight);
+  const structuralLimits=terraceStructuralLimits(joistStep);
   const rowCount=Math.ceil(across/boardModule);
   let boardRows = shapeMode==="free" && polygonClosed
     ? buildPolygonBoardRows(L,W,direction,boardModule,layoutMode,allowedLengths)
@@ -2284,7 +2383,7 @@ function calculate(){
 
   const joists=buildJoists(run,allSeams,joistStep);
   const zonedStructure=projectZones.length
-    ? buildZonedStructure(projectZones,direction,seamPatterns,joistStep,base,hasHouse,houseSide)
+    ? buildZonedStructure(projectZones,direction,seamPatterns,joistStep,base,hasHouse,houseSide,structuralLimits)
     : null;
 
   const joistLengthM=across/1000;
@@ -2312,7 +2411,7 @@ function calculate(){
   const beltAffected=hasHouse && houseAffectsAxis(direction,houseSide,"across");
   const beltLayout=supportLineLayout(
     across,
-    CONFIG.belt.maxSpacing,
+    structuralLimits.joistSupportMax,
     CONFIG.joist.maxEdgeCantilever
   );
 
@@ -2323,7 +2422,7 @@ function calculate(){
 
   if(shapeMode==="free" && polygonClosed){
     polygonStructure=buildPolygonBeltsAndPiles(
-      L,W,direction,beltLayout.positions,hasHouse,houseSide
+      L,W,direction,beltLayout.positions,hasHouse,houseSide,structuralLimits
     );
     beltMeters=polygonStructure.beltMeters;
     totalPiles=polygonStructure.totalPiles;
@@ -2332,7 +2431,7 @@ function calculate(){
     beltMeters=beltLayout.count*beltLengthM;
 
     const pileAffected=hasHouse && houseAffectsAxis(direction,houseSide,"run");
-    pileLayout=endpointPileLayout(run,CONFIG.ground.pileSpacingMax);
+    pileLayout=endpointPileLayout(run,structuralLimits.pileSpacingMax);
 
     totalPiles=beltLayout.count*pileLayout.count;
   }
@@ -2397,8 +2496,8 @@ function calculate(){
   $("checkJoistStep").textContent=fmt(joists.actualMaxStep||joistStep)+" / "+joistStep+" мм";
   $("checkEdgeOverhang").textContent=fmt(joists.edgeOverhangStart)+" / "+fmt(joists.edgeOverhangEnd)+" мм";
   $("checkBeltStep").textContent=zonedStructure
-    ? fmt(zonedStructure.maxBeltStep)+" / 1500 мм"
-    : fmt(beltLayout.step)+" / 1500 мм";
+    ? fmt(zonedStructure.maxBeltStep)+" / "+fmt(structuralLimits.joistSupportMax)+" мм"
+    : fmt(beltLayout.step)+" / "+fmt(structuralLimits.joistSupportMax)+" мм";
   const regularCount=zonedStructure
     ? zonedStructure.zones.reduce((sum,z)=>sum+z.joists.regular.length,0)
     : joists.regular.length;
@@ -2427,7 +2526,7 @@ function calculate(){
         .map(([len,count])=>count+" свай × "+fmt(Number(len))+" мм");
       $("pilesPerBelt").textContent="по зонам";
       $("pileStepOut").textContent="до "+fmt(zonedStructure.maxPileStep)+" мм";
-      $("checkPileStep").textContent=fmt(zonedStructure.maxPileStep)+" / 1500 мм";
+      $("checkPileStep").textContent=fmt(zonedStructure.maxPileStep)+" / "+fmt(structuralLimits.pileSpacingMax)+" мм";
       $("supports").textContent=parts.join(" + ");
       $("pileInfo").textContent=
         "80×80×2 строится как несущая система под 40×40×2: крайняя линия не дальше 200 мм от конца лаги, внутренний шаг ≤1500 мм. Сваи стоят на концах каждого физического участка 80×80×2 и равномерно между ними с шагом ≤1500 мм. На общей границе террасы и крыльца добавлен отдельный несущий профиль.";
@@ -2449,7 +2548,7 @@ function calculate(){
     }else{
       $("pilesPerBelt").textContent=pileLayout.count+" шт.";
       $("pileStepOut").textContent=fmt(pileLayout.step)+" мм";
-      $("checkPileStep").textContent=fmt(pileLayout.step)+" / 1500 мм";
+      $("checkPileStep").textContent=fmt(pileLayout.step)+" / "+fmt(structuralLimits.pileSpacingMax)+" мм";
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
         "Рядов пояса: "+beltLayout.count+
@@ -2485,8 +2584,8 @@ function calculate(){
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
-    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,
-    algorithmVersion:"2.4"
+    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
+    algorithmVersion:"3.0"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
