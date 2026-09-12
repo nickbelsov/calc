@@ -111,11 +111,6 @@ function closePolygon(){
 
 function resetPolygon(){
   projectZones=[];
-  projectZones=[
-    {id:"main",name:"Основная терраса",type:"terrace",x:0,y:0,w:4500,h:3500,pileLength:2500},
-    {id:"porch",name:"Крыльцо",type:"porch",x:1950,y:3500,w:600,h:1200,pileLength:2000}
-  ];
-
   polygonPoints=[
     {x:0,y:0},{x:6200,y:0},{x:6200,y:3800},{x:0,y:3800}
   ];
@@ -1388,7 +1383,7 @@ function mergeSupportPoints(points,tolerance=2){
     const existing=out.find(q=>Math.hypot(q.x-p.x,q.y-p.y)<=tolerance);
     if(existing){
       existing.pileLength=Math.max(existing.pileLength||0,p.pileLength||0);
-      existing.zones=uniquePositions([...(existing.zones||[]),...(p.zones||[])],0);
+      existing.zones=[...new Set([...(existing.zones||[]),...(p.zones||[])])];
     }else{
       out.push({...p,zones:[...(p.zones||[])]});
     }
@@ -1934,7 +1929,9 @@ function calculate(){
   $("joistStepOut").textContent="до "+fmt(joists.actualMaxStep||joistStep)+" мм";
   $("checkJoistStep").textContent=fmt(joists.actualMaxStep||joistStep)+" / "+joistStep+" мм";
   $("checkEdgeOverhang").textContent=fmt(joists.edgeOverhangStart)+" / "+fmt(joists.edgeOverhangEnd)+" мм";
-  $("checkBeltStep").textContent=fmt(beltLayout.step)+" / 1500 мм";
+  $("checkBeltStep").textContent=zonedStructure
+    ? fmt(zonedStructure.maxBeltStep)+" / 1500 мм"
+    : fmt(beltLayout.step)+" / 1500 мм";
   const regularCount=zonedStructure
     ? zonedStructure.zones.reduce((sum,z)=>sum+z.joists.regular.length,0)
     : joists.regular.length;
@@ -2017,7 +2014,9 @@ function calculate(){
   }
 
   $("tech").textContent=base==="ground"
-    ? "ДПК → профиль 40×40×2 → пояс 80×80×2 → сваи 2500 мм. Металл закупается хлыстами по 6 м."
+    ? (zonedStructure
+        ? "ДПК → профиль 40×40×2 → пояс 80×80×2 → зональные сваи: 2500 мм основная площадка / 2000 мм крыльцо. Металл закупается хлыстами по 6 м."
+        : "ДПК → профиль 40×40×2 → пояс 80×80×2 → сваи 2500 мм. Металл закупается хлыстами по 6 м.")
     : base==="roof"
       ? "Кровля / гидроизоляция: только регулируемые пластиковые опоры → металлический каркас → ДПК."
       : "Бетон: резиновые подкладки, арматурные штыри или регулируемые пластиковые опоры.";
@@ -2074,10 +2073,13 @@ function updateControls(){
 });
 
 function loadControlScheme(){
-  // Контрольный чертёж из загруженной пользователем схемы:
-  // основная площадка 4500×3500 мм;
-  // центральный выступ 600×1200 мм;
-  // 1950 + 600 + 1950 = 4500.
+  // Контрольный чертёж из загруженной схемы.
+  // Основная площадка 4500×3500 мм + центральное крыльцо 600×1200 мм.
+  projectZones=[
+    {id:"main",name:"Основная терраса",type:"terrace",x:0,y:0,w:4500,h:3500,pileLength:2500},
+    {id:"porch",name:"Крыльцо",type:"porch",x:1950,y:3500,w:600,h:1200,pileLength:2000}
+  ];
+
   polygonPoints=[
     {x:0,y:0},
     {x:4500,y:0},
