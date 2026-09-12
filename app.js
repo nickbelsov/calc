@@ -1224,17 +1224,162 @@ function enforcePileEdgeCantilever(spanLength,layout,maxCantilever=200,options={
   };
 }
 
+function polygonEdgeLength(a,b){
+  return Math.hypot(b.x-a.x,b.y-a.y);
+}
+
+function polygonFreePerimeterSegments(hasHouse=false,houseSide="top"){
+  if(!polygonClosed||polygonPoints.length<3) return [];
+  const b=polygonBounds(polygonPoints);
+  const tol=Math.max(2,Math.max(b.maxX-b.minX,b.maxY-b.minY)*0.002);
+  const segments=[];
+
+  const isHouseEdge=(p,q)=>{
+    if(!hasHouse) return false;
+
+    if(houseSide==="top"){
+      return Math.abs(p.y-b.minY)<=tol && Math.abs(q.y-b.minY)<=tol;
+    }
+    if(houseSide==="bottom"){
+      return Math.abs(p.y-b.maxY)<=tol && Math.abs(q.y-b.maxY)<=tol;
+    }
+    if(houseSide==="left"){
+      return Math.abs(p.x-b.minX)<=tol && Math.abs(q.x-b.minX)<=tol;
+    }
+    if(houseSide==="right"){
+      return Math.abs(p.x-b.maxX)<=tol && Math.abs(q.x-b.maxX)<=tol;
+    }
+    return false;
+  };
+
+  for(let i=0;i<polygonPoints.length;i++){
+    const p=polygonPoints[i],q=polygonPoints[(i+1)%polygonPoints.length];
+    const len=polygonEdgeLength(p,q);
+    if(len<1) continue;
+    if(isHouseEdge(p,q)) continue;
+
+    segments.push({
+      x1:p.x-b.minX,
+      y1:p.y-b.minY,
+      x2:q.x-b.minX,
+      y2:q.y-b.minY,
+      length:len,
+      reason:"perimeter",
+      pileLength:CONFIG.ground.pileLength
+    });
+  }
+
+  return segments;
+}
+
+function perimeterPilePoints(segments,maxSpacing,pileLength=CONFIG.ground.pileLength){
+  const points=[];
+
+  for(const seg of segments){
+    const layout=endpointPileLayout(seg.length,maxSpacing);
+    const dx=seg.x2-seg.x1;
+    const dy=seg.y2-seg.y1;
+    const len=Math.max(1,seg.length);
+
+    for(const d of layout.positions){
+      const t=d/len;
+      points.push({
+        x:seg.x1+dx*t,
+        y:seg.y1+dy*t,
+        pileLength:seg.pileLength||pileLength,
+        zones:["perimeter"]
+      });
+    }
+  }
+
+  return mergeSupportPoints(points,2);
+}
+
+function nearestDistancePointToSegment(px,py,x1,y1,x2,y2){
+  const vx=x2-x1,vy=y2-y1;
+  const wx=px-x1,wy=py-y1;
+  const vv=vx*vx+vy*vy;
+  if(vv<=1e-9) return Math.hypot(px-x1,py-y1);
+  let t=(wx*vx+wy*vy)/vv;
+  t=Math.max(0,Math.min(1,t));
+  const cx=x1+t*vx,cy=y1+t*vy;
+  return Math.hypot(px-cx,py-cy);
+}
+
+function maxJoistEndToSupportDistance(joistPositions,direction,L,W,perimeterSegments,internalBelts){
+  let maxDistance=0;
+
+  for(const pos of joistPositions){
+    const spans=polygonCrosslineSegments(pos,direction,L,W);
+    for(const span of spans){
+      const endpoints=direction==="l"
+        ? [
+            {x:pos,y:span.start},
+            {x:pos,y:span.start+span.length}
+          ]
+        : [
+            {x:span.start,y:pos},
+            {x:span.start+span.length,y:pos}
+          ];
+
+      for(const ep of endpoints){
+        let best=Infinity;
+
+        for(const seg of perimeterSegments||[]){
+          best=Math.min(best,nearestDistancePointToSegment(
+            ep.x,ep.y,seg.x1,seg.y1,seg.x2,seg.y2
+          ));
+        }
+
+        // Internal belts are axis-aligned support lines.
+        for(const belt of internalBelts||[]){
+          if(direction==="l"){
+            if(ep.x>=belt.start-1 && ep.x<=belt.start+belt.length+1){
+              best=Math.min(best,Math.abs(ep.y-belt.axis));
+            }
+          }else{
+            if(ep.y>=belt.start-1 && ep.y<=belt.start+belt.length+1){
+              best=Math.min(best,Math.abs(ep.x-belt.axis));
+            }
+          }
+        }
+
+        if(Number.isFinite(best)) maxDistance=Math.max(maxDistance,best);
+      }
+    }
+  }
+
+  return maxDistance;
+}
+
+function addArbitrarySegment(parent,seg,L,W,cls){
+  const w=parent.clientWidth,h=parent.clientHeight;
+  const x1=seg.x1/L*w,y1=seg.y1/W*h;
+  const x2=seg.x2/L*w,y2=seg.y2/W*h;
+  const dx=x2-x1,dy=y2-y1;
+  const len=Math.hypot(dx,dy);
+  const angle=Math.atan2(dy,dx)*180/Math.PI;
+
+  const el=document.createElement("div");
+  el.className=cls+" arbitrarySegment";
+  Object.assign(el.style,{
+    left:x1+"px",
+    top:y1+"px",
+    width:Math.max(1,len)+"px",
+    height:cls.includes("beltLine")?"4px":"2px",
+    transformOrigin:"0 50%",
+    transform:"rotate("+angle+"deg)"
+  });
+  parent.appendChild(el);
+}
+
 function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide){
   const run=direction==="l"?L:W;
   const belts=[];
   let beltMeters=0;
-  let totalPiles=0;
-  let maxPilesPerBelt=0;
   const pileSteps=[];
 
-  const pileAffected=hasHouse && houseAffectsAxis(direction,houseSide,"run");
-  const houseAtStart=houseAtAxisStart(direction,houseSide,"run");
-
+  // 1) Внутренние несущие линии 80×80×2.
   for(const beltPos of beltPositions){
     const across=direction==="l"?W:L;
     const scanPos=Math.min(across-0.001,Math.max(0.001,beltPos));
@@ -1243,7 +1388,6 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
 
     for(const span of spans){
       const layout=endpointPileLayout(span.length,CONFIG.ground.pileSpacingMax);
-
       const piles=layout.positions.map(p=>span.start+p);
 
       segments.push({
@@ -1251,23 +1395,65 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
         length:span.length,
         piles,
         pileStep:layout.step,
-        houseOffsetApplied:layout.houseOffsetApplied
+        houseOffsetApplied:false
       });
 
       beltMeters+=span.length/1000;
-      totalPiles+=piles.length;
-      maxPilesPerBelt=Math.max(maxPilesPerBelt,piles.length);
       if(layout.step) pileSteps.push(layout.step);
     }
 
     belts.push({axis:beltPos,segments});
   }
 
+  // 2) Периметральный пояс по всем свободным сторонам, включая скошенные.
+  const perimeterSegments=polygonFreePerimeterSegments(hasHouse,houseSide);
+  beltMeters+=perimeterSegments.reduce((sum,s)=>sum+s.length/1000,0);
+
+  const perimeterPiles=perimeterPilePoints(
+    perimeterSegments,
+    CONFIG.ground.pileSpacingMax,
+    CONFIG.ground.pileLength
+  );
+
+  // 3) Сваи внутренних поясов.
+  const internalPilePoints=[];
+  for(const belt of belts){
+    for(const seg of belt.segments){
+      for(const p of seg.piles){
+        if(direction==="l"){
+          internalPilePoints.push({
+            x:p,
+            y:belt.axis,
+            pileLength:CONFIG.ground.pileLength,
+            zones:["internal"]
+          });
+        }else{
+          internalPilePoints.push({
+            x:belt.axis,
+            y:p,
+            pileLength:CONFIG.ground.pileLength,
+            zones:["internal"]
+          });
+        }
+      }
+    }
+  }
+
+  const pilePoints=mergeSupportPoints(
+    [...perimeterPiles,...internalPilePoints],
+    2
+  );
+
   return {
     belts,
+    perimeterSegments,
+    pilePoints,
     beltMeters,
-    totalPiles,
-    maxPilesPerBelt,
+    totalPiles:pilePoints.length,
+    maxPilesPerBelt:Math.max(
+      0,
+      ...belts.flatMap(b=>b.segments.map(s=>s.piles.length))
+    ),
     minPileStep:pileSteps.length?Math.min(...pileSteps):0,
     maxPileStep:pileSteps.length?Math.max(...pileSteps):0
   };
@@ -1707,6 +1893,9 @@ function renderPlan(model){
           addBeltSegment(layer,direction,belt.axis,across,seg.start,seg.length,run);
         }
       }
+      for(const seg of polygonStructure.perimeterSegments||[]){
+        addArbitrarySegment(layer,seg,modelL,modelW,"beltLine perimeterBelt");
+      }
     }else{
       for(const pos of beltLayout.positions) addLine(layer,"beltLine",direction,pos,across,false);
     }
@@ -1739,23 +1928,12 @@ function renderPlan(model){
         layer.appendChild(dot);
       }
     }else if(model.shapeMode==="free" && polygonStructure){
-      for(const belt of polygonStructure.belts){
-        for(const seg of belt.segments){
-          for(const pilePos of seg.piles){
-            const dot=document.createElement("div");
-            dot.className="pileDot";
-
-            if(direction==="l"){
-              dot.style.left=(pilePos/run*w)+"px";
-              dot.style.top=(belt.axis/across*h)+"px";
-            }else{
-              dot.style.left=(belt.axis/across*w)+"px";
-              dot.style.top=(pilePos/run*h)+"px";
-            }
-
-            layer.appendChild(dot);
-          }
-        }
+      for(const p of polygonStructure.pilePoints||[]){
+        const dot=document.createElement("div");
+        dot.className="pileDot";
+        dot.style.left=(p.x/modelL*w)+"px";
+        dot.style.top=(p.y/modelW*h)+"px";
+        layer.appendChild(dot);
       }
     }else{
       for(const beltPos of beltLayout.positions){
@@ -1884,6 +2062,14 @@ function buildAlgorithmDiagnostics(model){
     text:"Свес слева/справа: "+fmt(joists.edgeOverhangStart)+" / "+fmt(joists.edgeOverhangEnd)+
       " мм, предел "+CONFIG.joist.maxEdgeCantilever+" мм."
   });
+
+  if(model.supportDistanceCheck!=null){
+    lines.push({
+      title:"Контроль свеса лаг",
+      text:"Максимальное расстояние от конца лаги 40×40×2 до ближайшего пояса 80×80×2: "+
+        fmt(model.supportDistanceCheck)+" мм / допустимо "+CONFIG.joist.maxEdgeCantilever+" мм."
+    });
+  }
 
   lines.push({
     title:"80×80×2",
@@ -2034,6 +2220,24 @@ function calculate(){
     totalPiles=zonedStructure.totalPiles;
   }
 
+  const supportDistanceCheck=
+    shapeMode==="free" && polygonStructure && !zonedStructure
+      ? maxJoistEndToSupportDistance(
+          joists.all,
+          direction,
+          L,
+          W,
+          polygonStructure.perimeterSegments||[],
+          polygonStructure.belts.flatMap(b=>
+            b.segments.map(s=>({
+              axis:b.axis,
+              start:s.start,
+              length:s.length
+            }))
+          )
+        )
+      : null;
+
   const beltBuy=stockPurchase(beltMeters);
 
   const shapeMetrics = shapeMode==="free" ? freeMetrics : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
@@ -2115,7 +2319,7 @@ function calculate(){
         : "—";
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
-        "Пояс 80×80×2 обрезан по реальному контуру. Сваи расставлены отдельно на каждом фактическом участке пояса с равномерным шагом не более 1500 мм."+
+        "80×80×2 проходит по всему свободному периметру, включая скошенные стороны, и по внутренним несущим линиям. Сваи стоят в концах каждого участка и далее равномерно с шагом не более 1500 мм."+
         (hasHouse?" Со стороны дома применяется отступ 400 мм.":"")+
         (pileLayout?.edgeCantileverStart!=null
           ? " Крайний свес 40×40 относительно опоры: "+fmt(pileLayout.edgeCantileverStart)+" / "+fmt(pileLayout.edgeCantileverEnd)+" мм, максимум 200 мм."
@@ -2159,8 +2363,8 @@ function calculate(){
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
-    beltMeters,totalPiles,zonedStructure,
-    algorithmVersion:"2.1"
+    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,
+    algorithmVersion:"2.2"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
