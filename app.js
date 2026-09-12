@@ -1164,16 +1164,6 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
           )
         : equalLayout(span.length,CONFIG.ground.pileSpacingMax);
 
-      layout=enforcePileEdgeCantilever(
-        span.length,
-        layout,
-        CONFIG.joist.maxEdgeCantilever,
-        {
-          exemptStart:pileAffected&&houseAtStart,
-          exemptEnd:pileAffected&&!houseAtStart
-        }
-      );
-
       const piles=layout.positions.map(p=>span.start+p);
 
       segments.push({
@@ -1367,6 +1357,9 @@ function mergeCollinearSegments(segments,tolerance=1){
       }
       if(seg.start<=cur.end+tolerance){
         cur.end=Math.max(cur.end,seg.end);
+        if(seg.pileLength||cur.pileLength){
+          cur.pileLength=Math.max(cur.pileLength||0,seg.pileLength||0);
+        }
       }else{
         merged.push(cur);
         cur={...seg};
@@ -1412,13 +1405,7 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
 
     const joists=buildJoists(run,localSeams,joistStep);
     const beltLayout=equalLayout(across,CONFIG.belt.maxSpacing);
-    let pileLayout=equalLayout(run,CONFIG.ground.pileSpacingMax);
-
-    pileLayout=enforcePileEdgeCantilever(
-      run,
-      pileLayout,
-      CONFIG.joist.maxEdgeCantilever
-    );
+    const pileLayout=equalLayout(run,CONFIG.ground.pileSpacingMax);
 
     const makeJoistSegment=(pos,type)=>{
       if(direction==="l"){
@@ -1432,25 +1419,9 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
 
     for(const pos of beltLayout.positions){
       if(direction==="l"){
-        beltSegments.push({orientation:"h",axis:zone.y+pos,start:zone.x,end:zone.x+zone.w,zoneId:zone.id});
+        beltSegments.push({orientation:"h",axis:zone.y+pos,start:zone.x,end:zone.x+zone.w,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength});
       }else{
-        beltSegments.push({orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,zoneId:zone.id});
-      }
-    }
-
-    if(base==="ground"){
-      for(const beltPos of beltLayout.positions){
-        for(const pilePos of pileLayout.positions){
-          const point=direction==="l"
-            ? {x:zone.x+pilePos,y:zone.y+beltPos}
-            : {x:zone.x+beltPos,y:zone.y+pilePos};
-
-          pilePoints.push({
-            ...point,
-            pileLength:zone.pileLength||CONFIG.ground.pileLength,
-            zones:[zone.id]
-          });
-        }
+        beltSegments.push({orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength});
       }
     }
 
@@ -1464,6 +1435,33 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
   }
 
   const mergedBelts=mergeCollinearSegments(beltSegments);
+  const pileSteps=[];
+
+  if(base==="ground"){
+    for(const seg of mergedBelts){
+      const length=seg.end-seg.start;
+      const layout=equalLayout(length,CONFIG.ground.pileSpacingMax);
+      pileSteps.push(layout.step||0);
+
+      for(const p of layout.positions){
+        pilePoints.push(seg.orientation==="h"
+          ? {
+              x:seg.start+p,
+              y:seg.axis,
+              pileLength:seg.pileLength||CONFIG.ground.pileLength,
+              zones:seg.zoneId?[seg.zoneId]:[]
+            }
+          : {
+              x:seg.axis,
+              y:seg.start+p,
+              pileLength:seg.pileLength||CONFIG.ground.pileLength,
+              zones:seg.zoneId?[seg.zoneId]:[]
+            }
+        );
+      }
+    }
+  }
+
   const mergedPiles=mergeSupportPoints(pilePoints);
 
   return {
@@ -1481,7 +1479,7 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
       acc[len]=(acc[len]||0)+1;
       return acc;
     },{}),
-    maxPileStep:Math.max(0,...zoneModels.map(z=>z.pileLayout.step||0)),
+    maxPileStep:Math.max(0,...pileSteps),
     maxBeltStep:Math.max(0,...zoneModels.map(z=>z.beltLayout.step||0))
   };
 }
@@ -1750,7 +1748,7 @@ function buildAlgorithmDiagnostics(model){
     lines.push({
       title:"Сваи",
       text:"На один пояс: "+pileLayout.count+
-        ", максимальный шаг "+fmt(pileLayout.step)+" мм, предел "+CONFIG.ground.pileSpacingMax+" мм."+
+        ", равномерный шаг "+fmt(pileLayout.step)+" мм, предел "+CONFIG.ground.pileSpacingMax+" мм."+
         houseException
     });
   }else if(base==="ground" && model.polygonStructure){
@@ -1875,16 +1873,6 @@ function calculate(){
       ? equalLayoutWithHouseOffset(run,CONFIG.ground.pileSpacingMax,CONFIG.ground.houseOffset,houseAtAxisStart(direction,houseSide,"run"))
       : equalLayout(run,CONFIG.ground.pileSpacingMax);
 
-    pileLayout=enforcePileEdgeCantilever(
-      run,
-      pileLayout,
-      CONFIG.joist.maxEdgeCantilever,
-      {
-        exemptStart:pileAffected&&houseAtAxisStart(direction,houseSide,"run"),
-        exemptEnd:pileAffected&&!houseAtAxisStart(direction,houseSide,"run")
-      }
-    );
-
     totalPiles=beltLayout.count*pileLayout.count;
   }
 
@@ -1987,12 +1975,6 @@ function calculate(){
         ? "400 мм от дома, далее ≈ "+fmt(pileLayout.step)+" мм"
         : fmt(pileLayout.step)+" мм";
       $("checkPileStep").textContent=fmt(pileLayout.step)+" / 1500 мм";
-      if(pileLayout.edgeCantileverStart!=null){
-        $("pileInfo").dataset.edgeCheck=
-          "Крайний свес 40×40 относительно опоры: "+
-          fmt(pileLayout.edgeCantileverStart)+" / "+
-          fmt(pileLayout.edgeCantileverEnd)+" мм (макс. 200 мм).";
-      }
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
         "Рядов пояса: "+beltLayout.count+
