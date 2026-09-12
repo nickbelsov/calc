@@ -182,7 +182,7 @@ function renderPolygonEditor(){
   // что и редактируемый контур. Так наклонные стороны не перекрываются
   // чёрной линией контура и остаются визуально видимыми.
   const perimeterBelts=lastModel?.shapeMode==="free"
-    ? (lastModel?.polygonStructure?.perimeterSegments||[])
+    ? (lastModel?.polygonStructure?.angledSupportSegments||[])
     : [];
 
   if($("showBelts")?.checked && perimeterBelts.length){
@@ -1295,6 +1295,80 @@ function polygonFreePerimeterSegments(hasHouse=false,houseSide="top"){
   return segments;
 }
 
+function polygonCentroidApprox(){
+  if(!polygonPoints.length) return {x:0,y:0};
+  const b=polygonBounds(polygonPoints);
+  return {
+    x:(b.minX+b.maxX)/2,
+    y:(b.minY+b.maxY)/2
+  };
+}
+
+function angledInsetSupportSegments(direction,hasHouse=false,houseSide="top",maxLagOverhang=200){
+  const perimeter=polygonFreePerimeterSegments(hasHouse,houseSide);
+  const center=polygonCentroidApprox();
+  const b=polygonBounds(polygonPoints);
+  const out=[];
+  const axisTol=2;
+
+  for(const edge of perimeter){
+    const dx=edge.absX2-edge.absX1;
+    const dy=edge.absY2-edge.absY1;
+    const len=Math.hypot(dx,dy);
+    if(len<1) continue;
+
+    // Только реально наклонные стороны. Горизонтальные/вертикальные
+    // уже обслуживаются обычной системой параллельных поясов.
+    if(Math.abs(dx)<=axisTol || Math.abs(dy)<=axisTol) continue;
+
+    const tx=dx/len, ty=dy/len;
+    let nx=-ty, ny=tx;
+
+    const mx=(edge.absX1+edge.absX2)/2;
+    const my=(edge.absY1+edge.absY2)/2;
+
+    // Нормаль должна смотреть внутрь площадки.
+    if((center.x-mx)*nx+(center.y-my)*ny<0){
+      nx=-nx; ny=-ny;
+    }
+
+    // Выбираем перпендикулярное смещение так, чтобы расстояние
+    // ВДОЛЬ ЛАГИ от её конца до пересечения с поясом было <= 200 мм.
+    // direction=l => лаги вертикальные, direction=w => горизонтальные.
+    const normalAlongJoist = direction==="l" ? Math.abs(ny) : Math.abs(nx);
+    if(normalAlongJoist<0.05) continue;
+
+    const normalOffset=Math.min(
+      maxLagOverhang,
+      Math.max(40,maxLagOverhang*normalAlongJoist)
+    );
+
+    const ax1=edge.absX1+nx*normalOffset;
+    const ay1=edge.absY1+ny*normalOffset;
+    const ax2=edge.absX2+nx*normalOffset;
+    const ay2=edge.absY2+ny*normalOffset;
+
+    out.push({
+      x1:ax1-b.minX,
+      y1:ay1-b.minY,
+      x2:ax2-b.minX,
+      y2:ay2-b.minY,
+      absX1:ax1,
+      absY1:ay1,
+      absX2:ax2,
+      absY2:ay2,
+      length:len,
+      reason:"angled-inset-support",
+      sourceEdge:edge,
+      normalOffset,
+      lagOverhang:normalOffset/normalAlongJoist,
+      pileLength:CONFIG.ground.pileLength
+    });
+  }
+
+  return out;
+}
+
 function perimeterPilePoints(segments,maxSpacing,pileLength=CONFIG.ground.pileLength){
   const points=[];
 
@@ -1397,12 +1471,11 @@ function addArbitrarySegment(parent,seg,L,W,cls){
 }
 
 function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide){
-  const run=direction==="l"?L:W;
   const belts=[];
   let beltMeters=0;
   const pileSteps=[];
 
-  // 1) Внутренние несущие линии 80×80×2.
+  // 1) Внутренние прямые несущие линии 80×80×2.
   for(const beltPos of beltPositions){
     const across=direction==="l"?W:L;
     const scanPos=Math.min(across-0.001,Math.max(0.001,beltPos));
@@ -1428,17 +1501,25 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     belts.push({axis:beltPos,segments});
   }
 
-  // 2) Периметральный пояс по всем свободным сторонам, включая скошенные.
-  const perimeterSegments=polygonFreePerimeterSegments(hasHouse,houseSide);
-  beltMeters+=perimeterSegments.reduce((sum,s)=>sum+s.length/1000,0);
+  // 2) Для каждой свободной наклонной стороны строим ОТДЕЛЬНЫЙ
+  // внутренний пояс 80×80×2, параллельный стороне.
+  // Его положение определяется правилом: свес конца лаги <= 200 мм.
+  const angledSupportSegments=angledInsetSupportSegments(
+    direction,
+    hasHouse,
+    houseSide,
+    CONFIG.joist.maxEdgeCantilever
+  );
 
-  const perimeterPiles=perimeterPilePoints(
-    perimeterSegments,
+  beltMeters+=angledSupportSegments.reduce((sum,s)=>sum+s.length/1000,0);
+
+  const angledPilePoints=perimeterPilePoints(
+    angledSupportSegments,
     CONFIG.ground.pileSpacingMax,
     CONFIG.ground.pileLength
   );
 
-  // 3) Сваи внутренних поясов.
+  // 3) Сваи внутренних прямых поясов.
   const internalPilePoints=[];
   for(const belt of belts){
     for(const seg of belt.segments){
@@ -1463,22 +1544,31 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
   }
 
   const pilePoints=mergeSupportPoints(
-    [...perimeterPiles,...internalPilePoints],
+    [...angledPilePoints,...internalPilePoints],
     2
   );
 
   return {
     belts,
-    perimeterSegments,
+    angledSupportSegments,
+    // Контур оставляем только как геометрию площадки, не как несущий пояс.
+    perimeterSegments:[],
     pilePoints,
     beltMeters,
     totalPiles:pilePoints.length,
     maxPilesPerBelt:Math.max(
       0,
-      ...belts.flatMap(b=>b.segments.map(s=>s.piles.length))
+      ...belts.flatMap(b=>b.segments.map(s=>s.piles.length)),
+      ...angledSupportSegments.map(s=>endpointPileLayout(s.length,CONFIG.ground.pileSpacingMax).count)
     ),
     minPileStep:pileSteps.length?Math.min(...pileSteps):0,
-    maxPileStep:pileSteps.length?Math.max(...pileSteps):0
+    maxPileStep:Math.max(
+      pileSteps.length?Math.max(...pileSteps):0,
+      ...angledSupportSegments.map(s=>endpointPileLayout(s.length,CONFIG.ground.pileSpacingMax).step||0)
+    ),
+    maxAngledLagOverhang:angledSupportSegments.length
+      ? Math.max(...angledSupportSegments.map(s=>s.lagOverhang||0))
+      : 0
   };
 }
 
@@ -1916,8 +2006,8 @@ function renderPlan(model){
           addBeltSegment(layer,direction,belt.axis,across,seg.start,seg.length,run);
         }
       }
-      for(const seg of polygonStructure.perimeterSegments||[]){
-        addArbitrarySegment(layer,seg,modelL,modelW,"beltLine perimeterBelt");
+      for(const seg of polygonStructure.angledSupportSegments||[]){
+        addArbitrarySegment(layer,seg,modelL,modelW,"beltLine angledSupportBelt");
       }
     }else{
       for(const pos of beltLayout.positions) addLine(layer,"beltLine",direction,pos,across,false);
@@ -2086,6 +2176,15 @@ function buildAlgorithmDiagnostics(model){
       " мм, предел "+CONFIG.joist.maxEdgeCantilever+" мм."
   });
 
+  if(model.polygonStructure?.angledSupportSegments?.length){
+    lines.push({
+      title:"Пояса вдоль косых сторон",
+      text:model.polygonStructure.angledSupportSegments.map((s,i)=>
+        "№"+(i+1)+": "+fmt(s.length)+" мм, свес лаг "+fmt(s.lagOverhang)+" мм"
+      ).join(" | ")
+    });
+  }
+
   if(model.supportDistanceCheck!=null){
     lines.push({
       title:"Контроль свеса лаг",
@@ -2250,7 +2349,7 @@ function calculate(){
           direction,
           L,
           W,
-          polygonStructure.perimeterSegments||[],
+          polygonStructure.angledSupportSegments||[],
           polygonStructure.belts.flatMap(b=>
             b.segments.map(s=>({
               axis:b.axis,
@@ -2342,7 +2441,7 @@ function calculate(){
         : "—";
       $("supports").textContent=totalPiles+" свай × 2500 мм";
       $("pileInfo").textContent=
-        "80×80×2 проходит по всему свободному периметру, включая скошенные стороны, и по внутренним несущим линиям. Сваи стоят в концах каждого участка и далее равномерно с шагом не более 1500 мм."+
+        "Для каждой свободной наклонной стороны строится отдельный внутренний пояс 80×80×2, параллельный стороне. Его положение рассчитывается так, чтобы свес конца лаги 40×40×2 до точки опоры был не более 200 мм. Сваи стоят на концах пояса и далее равномерно с шагом не более 1500 мм."+
         (hasHouse?" Со стороны дома применяется отступ 400 мм.":"")+
         (pileLayout?.edgeCantileverStart!=null
           ? " Крайний свес 40×40 относительно опоры: "+fmt(pileLayout.edgeCantileverStart)+" / "+fmt(pileLayout.edgeCantileverEnd)+" мм, максимум 200 мм."
@@ -2387,7 +2486,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,
-    algorithmVersion:"2.3"
+    algorithmVersion:"2.4"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
