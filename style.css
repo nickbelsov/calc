@@ -594,3 +594,19 @@ body.rightCollapsed .result{
 .zoneOutline.zone-porch span{
   color:#9d542e;
 }
+
+/* Angled perimeter 80×80 support belt rendered inside polygon SVG */
+.perimeterSupportSvg{
+  stroke:var(--belt);
+  stroke-width:10;
+  stroke-linecap:square;
+  stroke-linejoin:miter;
+  vector-effect:non-scaling-stroke;
+  opacity:.92;
+  pointer-events:none;
+}
+.polygonFill{
+  stroke:#202527;
+  stroke-width:2.2;
+  vector-effect:non-scaling-stroke;
+}
