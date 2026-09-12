@@ -21,6 +21,7 @@ const layoutHints = {
 };
 
 let lastModel = null;
+let projectZones = [];
 let polygonPoints = [
   {x:0,y:0},{x:6200,y:0},{x:6200,y:3800},{x:0,y:3800}
 ];
@@ -80,6 +81,7 @@ function eventToSvg(svg,e){
 }
 
 function startDrawingPolygon(){
+  projectZones=[];
   polygonPoints=[];
   polygonClosed=false;
   drawingPolygon=true;
@@ -108,6 +110,12 @@ function closePolygon(){
 }
 
 function resetPolygon(){
+  projectZones=[];
+  projectZones=[
+    {id:"main",name:"Основная терраса",type:"terrace",x:0,y:0,w:4500,h:3500,pileLength:2500},
+    {id:"porch",name:"Крыльцо",type:"porch",x:1950,y:3500,w:600,h:1200,pileLength:2000}
+  ];
+
   polygonPoints=[
     {x:0,y:0},{x:6200,y:0},{x:6200,y:3800},{x:0,y:3800}
   ];
@@ -202,6 +210,7 @@ function renderPolygonEditor(){
       add.setAttribute("class","addHandle");
       add.addEventListener("click",e=>{
         e.stopPropagation();
+        projectZones=[];
         polygonPoints.splice(i+1,0,{x:mx,y:my});
         calculate();
       });
@@ -237,6 +246,7 @@ function renderPolygonEditor(){
         if(!Number.isFinite(desired)||desired<=0) return;
         const scale=desired/Math.max(1,length);
         const dx=next.x-p.x,dy=next.y-p.y;
+        projectZones=[];
         polygonPoints[(i+1)%polygonPoints.length]={
           x:p.x+dx*scale,
           y:p.y+dy*scale
@@ -275,6 +285,7 @@ function installPolygonPointerHandlers(){
   svg.addEventListener("click",e=>{
     if(!drawingPolygon || e.target.classList.contains("vertexHandle")) return;
     const loc=eventToSvg(svg,e);
+    projectZones=[];
     polygonPoints.push({
       x:loc.x,
       y:loc.y
@@ -285,6 +296,7 @@ function installPolygonPointerHandlers(){
   svg.addEventListener("pointermove",e=>{
     if(draggingVertex<0) return;
     const loc=eventToSvg(svg,e);
+    projectZones=[];
     polygonPoints[draggingVertex]={
       x:loc.x,
       y:loc.y
@@ -1329,13 +1341,209 @@ function renderEngineeringDimensions(layer,model){
   layer.appendChild(mark);
 }
 
+function zoneAxisOrigin(zone,direction,axis){
+  if(axis==="run") return direction==="l" ? zone.x : zone.y;
+  return direction==="l" ? zone.y : zone.x;
+}
+
+function zoneAxisLength(zone,direction,axis){
+  if(axis==="run") return direction==="l" ? zone.w : zone.h;
+  return direction==="l" ? zone.h : zone.w;
+}
+
+function mergeCollinearSegments(segments,tolerance=1){
+  const groups=new Map();
+
+  for(const seg of segments){
+    const key=seg.orientation+":"+Math.round(seg.axis/tolerance);
+    if(!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push({...seg});
+  }
+
+  const merged=[];
+  for(const items of groups.values()){
+    items.sort((x,y)=>x.start-y.start);
+    let cur=null;
+
+    for(const seg of items){
+      if(!cur){
+        cur={...seg};
+        continue;
+      }
+      if(seg.start<=cur.end+tolerance){
+        cur.end=Math.max(cur.end,seg.end);
+      }else{
+        merged.push(cur);
+        cur={...seg};
+      }
+    }
+    if(cur) merged.push(cur);
+  }
+  return merged;
+}
+
+function mergeSupportPoints(points,tolerance=2){
+  const out=[];
+  for(const p of points){
+    const existing=out.find(q=>Math.hypot(q.x-p.x,q.y-p.y)<=tolerance);
+    if(existing){
+      existing.pileLength=Math.max(existing.pileLength||0,p.pileLength||0);
+      existing.zones=uniquePositions([...(existing.zones||[]),...(p.zones||[])],0);
+    }else{
+      out.push({...p,zones:[...(p.zones||[])]});
+    }
+  }
+  return out;
+}
+
+function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
+  if(!zones?.length) return null;
+
+  const zoneModels=[];
+  const joistSegments=[];
+  const beltSegments=[];
+  const pilePoints=[];
+
+  for(const zone of zones){
+    const runOrigin=zoneAxisOrigin(zone,direction,"run");
+    const acrossOrigin=zoneAxisOrigin(zone,direction,"across");
+    const run=zoneAxisLength(zone,direction,"run");
+    const across=zoneAxisLength(zone,direction,"across");
+
+    const globalSeams=(seamPatterns?.all||[]);
+    const localSeams=globalSeams
+      .filter(x=>x>runOrigin+1&&x<runOrigin+run-1)
+      .map(x=>x-runOrigin);
+
+    const joists=buildJoists(run,localSeams,joistStep);
+    const beltLayout=equalLayout(across,CONFIG.belt.maxSpacing);
+    let pileLayout=equalLayout(run,CONFIG.ground.pileSpacingMax);
+
+    pileLayout=enforcePileEdgeCantilever(
+      run,
+      pileLayout,
+      CONFIG.joist.maxEdgeCantilever
+    );
+
+    const makeJoistSegment=(pos,type)=>{
+      if(direction==="l"){
+        return {orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,type,zoneId:zone.id};
+      }
+      return {orientation:"h",axis:zone.y+pos,start:zone.x,end:zone.x+zone.w,type,zoneId:zone.id};
+    };
+
+    joists.regular.forEach(pos=>joistSegments.push(makeJoistSegment(pos,"regular")));
+    joists.seam.forEach(pos=>joistSegments.push(makeJoistSegment(pos,"seam")));
+
+    for(const pos of beltLayout.positions){
+      if(direction==="l"){
+        beltSegments.push({orientation:"h",axis:zone.y+pos,start:zone.x,end:zone.x+zone.w,zoneId:zone.id});
+      }else{
+        beltSegments.push({orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,zoneId:zone.id});
+      }
+    }
+
+    if(base==="ground"){
+      for(const beltPos of beltLayout.positions){
+        for(const pilePos of pileLayout.positions){
+          const point=direction==="l"
+            ? {x:zone.x+pilePos,y:zone.y+beltPos}
+            : {x:zone.x+beltPos,y:zone.y+pilePos};
+
+          pilePoints.push({
+            ...point,
+            pileLength:zone.pileLength||CONFIG.ground.pileLength,
+            zones:[zone.id]
+          });
+        }
+      }
+    }
+
+    zoneModels.push({
+      ...zone,
+      runOrigin,acrossOrigin,run,across,
+      joists,beltLayout,pileLayout,
+      regularJoistMeters:joists.regular.length*across/1000,
+      seamJoistMeters:joists.seam.length*across/1000
+    });
+  }
+
+  const mergedBelts=mergeCollinearSegments(beltSegments);
+  const mergedPiles=mergeSupportPoints(pilePoints);
+
+  return {
+    zones:zoneModels,
+    joistSegments,
+    beltSegments:mergedBelts,
+    pilePoints:mergedPiles,
+    regularJoistMeters:zoneModels.reduce((sum,z)=>sum+z.regularJoistMeters,0),
+    seamJoistMeters:zoneModels.reduce((sum,z)=>sum+z.seamJoistMeters,0),
+    totalJoistMeters:zoneModels.reduce((sum,z)=>sum+z.regularJoistMeters+z.seamJoistMeters,0),
+    beltMeters:mergedBelts.reduce((sum,s)=>sum+(s.end-s.start)/1000,0),
+    totalPiles:mergedPiles.length,
+    pileCountsByLength:mergedPiles.reduce((acc,p)=>{
+      const len=p.pileLength||CONFIG.ground.pileLength;
+      acc[len]=(acc[len]||0)+1;
+      return acc;
+    },{}),
+    maxPileStep:Math.max(0,...zoneModels.map(z=>z.pileLayout.step||0)),
+    maxBeltStep:Math.max(0,...zoneModels.map(z=>z.beltLayout.step||0))
+  };
+}
+
+function addAbsoluteSegment(parent,seg,L,W,cls){
+  const w=parent.clientWidth,h=parent.clientHeight;
+  const el=document.createElement("div");
+  el.className=cls;
+
+  if(seg.orientation==="h"){
+    Object.assign(el.style,{
+      left:(seg.start/L*w)+"px",
+      width:Math.max(1,(seg.end-seg.start)/L*w)+"px",
+      top:(seg.axis/W*h)+"px",
+      height:cls.includes("beltLine")?"4px":"2px"
+    });
+  }else{
+    Object.assign(el.style,{
+      top:(seg.start/W*h)+"px",
+      height:Math.max(1,(seg.end-seg.start)/W*h)+"px",
+      left:(seg.axis/L*w)+"px",
+      width:cls.includes("beltLine")?"4px":"2px"
+    });
+  }
+  parent.appendChild(el);
+}
+
+function renderZoneOutlines(parent,zoned,L,W){
+  if(!zoned?.zones?.length) return;
+  const w=parent.clientWidth,h=parent.clientHeight;
+
+  zoned.zones.forEach(zone=>{
+    const box=document.createElement("div");
+    box.className="zoneOutline zone-"+(zone.type||"area");
+    Object.assign(box.style,{
+      left:(zone.x/L*w)+"px",
+      top:(zone.y/W*h)+"px",
+      width:(zone.w/L*w)+"px",
+      height:(zone.h/W*h)+"px"
+    });
+
+    const label=document.createElement("span");
+    label.textContent=zone.name||zone.id;
+    box.appendChild(label);
+    parent.appendChild(box);
+  });
+}
+
 function renderPlan(model){
   const terrace=$("terrace");
   const layer=$("constructionLayer");
   layer.innerHTML="";
   applyPolygonToTerrace();
 
-  const {run,across,direction,joists,beltLayout,pileLayout,base,polygonStructure}=model;
+  const {run,across,direction,joists,beltLayout,pileLayout,base,polygonStructure,zonedStructure}=model;
+  const modelL=direction==="l"?run:across;
+  const modelW=direction==="l"?across:run;
 
   if(model.shapeMode==="free" && (!polygonClosed || polygonPoints.length<3)){
     layer.innerHTML="";
@@ -1343,7 +1551,11 @@ function renderPlan(model){
   }
 
   if($("showBelts").checked){
-    if(model.shapeMode==="free" && polygonStructure){
+    if(zonedStructure){
+      for(const seg of zonedStructure.beltSegments){
+        addAbsoluteSegment(layer,seg,modelL,modelW,"beltLine");
+      }
+    }else if(model.shapeMode==="free" && polygonStructure){
       for(const belt of polygonStructure.belts){
         for(const seg of belt.segments){
           addBeltSegment(layer,direction,belt.axis,across,seg.start,seg.length,run);
@@ -1355,8 +1567,14 @@ function renderPlan(model){
   }
 
   if($("showJoists").checked){
-    for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
-    for(const pos of joists.seam) addLine(layer,"joistLine",direction,pos,run,true);
+    if(zonedStructure){
+      for(const seg of zonedStructure.joistSegments){
+        addAbsoluteSegment(layer,seg,modelL,modelW,"joistLine"+(seg.type==="seam"?" double":""));
+      }
+    }else{
+      for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
+      for(const pos of joists.seam) addLine(layer,"joistLine",direction,pos,run,true);
+    }
   }
 
   if($("showBoards").checked) renderBoardRows(layer,model);
@@ -1365,7 +1583,16 @@ function renderPlan(model){
     const w=layer.clientWidth;
     const h=layer.clientHeight;
 
-    if(model.shapeMode==="free" && polygonStructure){
+    if(zonedStructure){
+      for(const p of zonedStructure.pilePoints){
+        const dot=document.createElement("div");
+        dot.className="pileDot";
+        dot.style.left=(p.x/modelL*w)+"px";
+        dot.style.top=(p.y/modelW*h)+"px";
+        dot.title="Свая "+fmt(p.pileLength)+" мм";
+        layer.appendChild(dot);
+      }
+    }else if(model.shapeMode==="free" && polygonStructure){
       for(const belt of polygonStructure.belts){
         for(const seg of belt.segments){
           for(const pilePos of seg.piles){
@@ -1404,6 +1631,7 @@ function renderPlan(model){
     }
   }
 
+  if(zonedStructure) renderZoneOutlines(layer,zonedStructure,modelL,modelW);
   renderEngineeringDimensions(layer,model);
 }
 
@@ -1467,6 +1695,15 @@ function buildAlgorithmDiagnostics(model){
   const lines=[];
   const {run,across,joists,beltLayout,pileLayout,base,boardRows,seamPatterns,shapeMode}=model;
 
+  if(model.zonedStructure){
+    lines.push({
+      title:"Зоны проекта",
+      text:model.zonedStructure.zones.map(z=>
+        z.name+" "+fmt(z.w)+"×"+fmt(z.h)+" мм"+(z.pileLength?" · сваи "+fmt(z.pileLength)+" мм":"")
+      ).join(" | ")+" Общие опоры и участки пояса объединяются."
+    });
+  }
+
   lines.push({
     title:"ДПК",
     text:"Закупочные длины: "+getAllowedBoardLengths().map(x=>x/1000+" м").join(" / ")+
@@ -1486,8 +1723,12 @@ function buildAlgorithmDiagnostics(model){
   lines.push({
     title:"40×40×2",
     text:"Шаг по осям не более "+joistStepByBoardHeight(+$("boardHeight").value||23)+
-      " мм. Обычных линий: "+joists.regular.length+
-      ", линий под стыками: "+joists.seam.length+
+      " мм. Обычных линий: "+(model.zonedStructure
+        ? model.zonedStructure.zones.reduce((sum,z)=>sum+z.joists.regular.length,0)
+        : joists.regular.length)+
+      ", линий под стыками: "+(model.zonedStructure
+        ? model.zonedStructure.zones.reduce((sum,z)=>sum+z.joists.seam.length,0)
+        : joists.seam.length)+
       ". Фактический максимальный шаг: "+fmt(joists.actualMaxStep)+" мм."+
       (shapeMode==="free"?" Метраж считается по фактическим участкам внутри контура.":"")
   });
@@ -1500,8 +1741,11 @@ function buildAlgorithmDiagnostics(model){
 
   lines.push({
     title:"80×80×2",
-    text:"Рядов: "+beltLayout.count+
-      ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
+    text:model.zonedStructure
+      ? model.zonedStructure.zones.map(z=>z.name+": "+z.beltLayout.count+" ряда, шаг "+fmt(z.beltLayout.step)+" мм").join(" | ")+
+        ". Предел "+CONFIG.belt.maxSpacing+" мм."
+      : "Рядов: "+beltLayout.count+
+        ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
   });
 
   if(base==="ground" && pileLayout){
@@ -1585,6 +1829,9 @@ function calculate(){
   }
 
   const joists=buildJoists(run,allSeams,joistStep);
+  const zonedStructure=projectZones.length
+    ? buildZonedStructure(projectZones,direction,seamPatterns,joistStep,base)
+    : null;
 
   const joistLengthM=across/1000;
   const regularJoistMeters=shapeMode==="free"&&polygonClosed
@@ -1593,7 +1840,16 @@ function calculate(){
   const seamJoistMeters=shapeMode==="free"&&polygonClosed
     ? polygonJoistMeters(joists.seam,direction,L,W)
     : joists.seam.length*joistLengthM;
-  const totalJoistMeters=regularJoistMeters+seamJoistMeters;
+  let effectiveRegularJoistMeters=regularJoistMeters;
+  let effectiveSeamJoistMeters=seamJoistMeters;
+  let totalJoistMeters=regularJoistMeters+seamJoistMeters;
+
+  if(zonedStructure){
+    effectiveRegularJoistMeters=zonedStructure.regularJoistMeters;
+    effectiveSeamJoistMeters=zonedStructure.seamJoistMeters;
+    totalJoistMeters=zonedStructure.totalJoistMeters;
+  }
+
   const joistBuy=stockPurchase(totalJoistMeters);
 
   const totalBoards=Object.values(boardRows.purchases).reduce((a,b)=>a+b,0);
@@ -1637,6 +1893,11 @@ function calculate(){
     totalPiles=beltLayout.count*pileLayout.count;
   }
 
+  if(zonedStructure){
+    beltMeters=zonedStructure.beltMeters;
+    totalPiles=zonedStructure.totalPiles;
+  }
+
   const beltBuy=stockPurchase(beltMeters);
 
   const shapeMetrics = shapeMode==="free" ? freeMetrics : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
@@ -1674,20 +1935,41 @@ function calculate(){
   $("checkJoistStep").textContent=fmt(joists.actualMaxStep||joistStep)+" / "+joistStep+" мм";
   $("checkEdgeOverhang").textContent=fmt(joists.edgeOverhangStart)+" / "+fmt(joists.edgeOverhangEnd)+" мм";
   $("checkBeltStep").textContent=fmt(beltLayout.step)+" / 1500 мм";
-  $("regularJoists").textContent=joists.regular.length+" шт. / "+fmt(regularJoistMeters,1)+" м.п.";
-  $("doubleJoists").textContent=joists.seam.length+" шт. / "+fmt(seamJoistMeters,1)+" м.п.";
+  const regularCount=zonedStructure
+    ? zonedStructure.zones.reduce((sum,z)=>sum+z.joists.regular.length,0)
+    : joists.regular.length;
+  const seamCount=zonedStructure
+    ? zonedStructure.zones.reduce((sum,z)=>sum+z.joists.seam.length,0)
+    : joists.seam.length;
+
+  $("regularJoists").textContent=regularCount+" шт. / "+fmt(effectiveRegularJoistMeters,1)+" м.п.";
+  $("doubleJoists").textContent=seamCount+" шт. / "+fmt(effectiveSeamJoistMeters,1)+" м.п.";
   $("joists").textContent=fmt(totalJoistMeters,1)+" м.п.";
   $("joistPurchase").textContent=joistBuy.sticks+" хлыстов / "+fmt(joistBuy.meters)+" м";
 
-  $("beltRows").textContent=beltLayout.count+" шт.";
-  $("beltStepOut").textContent=beltLayout.houseOffsetApplied
-    ? "400 мм от дома, далее ≈ "+fmt(beltLayout.step)+" мм"
-    : fmt(beltLayout.step)+" мм";
+  $("beltRows").textContent=zonedStructure
+    ? zonedStructure.zones.map(z=>z.name+": "+z.beltLayout.count).join(" / ")
+    : beltLayout.count+" шт.";
+  $("beltStepOut").textContent=zonedStructure
+    ? "до "+fmt(zonedStructure.maxBeltStep)+" мм по зонам"
+    : (beltLayout.houseOffsetApplied
+        ? "400 мм от дома, далее ≈ "+fmt(beltLayout.step)+" мм"
+        : fmt(beltLayout.step)+" мм");
   $("belt").textContent=fmt(beltMeters,1)+" м.п.";
   $("beltPurchase").textContent=beltBuy.sticks+" хлыстов / "+fmt(beltBuy.meters)+" м";
 
   if(base==="ground"){
-    if(shapeMode==="free" && polygonStructure){
+    if(zonedStructure){
+      const parts=Object.entries(zonedStructure.pileCountsByLength)
+        .sort((x,y)=>Number(y[0])-Number(x[0]))
+        .map(([len,count])=>count+" свай × "+fmt(Number(len))+" мм");
+      $("pilesPerBelt").textContent="по зонам";
+      $("pileStepOut").textContent="до "+fmt(zonedStructure.maxPileStep)+" мм";
+      $("checkPileStep").textContent=fmt(zonedStructure.maxPileStep)+" / 1500 мм";
+      $("supports").textContent=parts.join(" + ");
+      $("pileInfo").textContent=
+        "Конструкция разделена на зоны. Основная терраса и крыльцо получают собственные пояса и опоры; совпадающие элементы на общей границе объединяются.";
+    }else if(shapeMode==="free" && polygonStructure){
       $("pilesPerBelt").textContent="по фактическим участкам";
       $("pileStepOut").textContent=polygonStructure.maxPileStep
         ? "до "+fmt(polygonStructure.maxPileStep)+" мм"
@@ -1744,7 +2026,10 @@ function calculate(){
 
   lastModel={
     run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns,polygonStructure,
-    totalJoistMeters,regularJoistMeters,seamJoistMeters,beltMeters,totalPiles,
+    totalJoistMeters,
+    regularJoistMeters:effectiveRegularJoistMeters,
+    seamJoistMeters:effectiveSeamJoistMeters,
+    beltMeters,totalPiles,zonedStructure,
     algorithmVersion:CONFIG.algorithmVersion
   };
   renderAlgorithmDiagnostics(lastModel);
@@ -2021,7 +2306,8 @@ window.getNimtechProjectInputs=()=>{
   shapeMode:$("shapeMode").value,
   base:$("base").value,
   polygonPoints:polygonPoints.map(p=>({...p})),
-  polygonClosed
+  polygonClosed,
+  projectZones:projectZones.map(z=>({...z}))
   };
 };
 $("canvasViewport")?.addEventListener("contextmenu",e=>e.preventDefault());
