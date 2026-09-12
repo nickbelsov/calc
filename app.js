@@ -1464,7 +1464,72 @@ function mergeSupportPoints(points,tolerance=2){
   return out;
 }
 
-function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
+function supportFrameTieBelts(zone,direction,beltLayout,hasHouse,houseSide){
+  if(!beltLayout?.positions?.length) return [];
+
+  const first=beltLayout.positions[0];
+  const last=beltLayout.positions[beltLayout.positions.length-1];
+  const out=[];
+
+  const runStartSide=direction==="l" ? "left" : "top";
+  const runEndSide=direction==="l" ? "right" : "bottom";
+  const omitStart=hasHouse && houseSide===runStartSide;
+  const omitEnd=hasHouse && houseSide===runEndSide;
+
+  if(direction==="l"){
+    // Основные 80×80 горизонтальны; торцевые связи вертикальны.
+    if(!omitStart){
+      out.push({
+        orientation:"v",
+        axis:zone.x,
+        start:zone.y+first,
+        end:zone.y+last,
+        zoneId:zone.id,
+        pileLength:zone.pileLength||CONFIG.ground.pileLength,
+        reason:"support-frame-tie"
+      });
+    }
+    if(!omitEnd){
+      out.push({
+        orientation:"v",
+        axis:zone.x+zone.w,
+        start:zone.y+first,
+        end:zone.y+last,
+        zoneId:zone.id,
+        pileLength:zone.pileLength||CONFIG.ground.pileLength,
+        reason:"support-frame-tie"
+      });
+    }
+  }else{
+    // Основные 80×80 вертикальны; торцевые связи горизонтальны.
+    if(!omitStart){
+      out.push({
+        orientation:"h",
+        axis:zone.y,
+        start:zone.x+first,
+        end:zone.x+last,
+        zoneId:zone.id,
+        pileLength:zone.pileLength||CONFIG.ground.pileLength,
+        reason:"support-frame-tie"
+      });
+    }
+    if(!omitEnd){
+      out.push({
+        orientation:"h",
+        axis:zone.y+zone.h,
+        start:zone.x+first,
+        end:zone.x+last,
+        zoneId:zone.id,
+        pileLength:zone.pileLength||CONFIG.ground.pileLength,
+        reason:"support-frame-tie"
+      });
+    }
+  }
+
+  return out;
+}
+
+function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHouse=false,houseSide="top"){
   if(!zones?.length) return null;
 
   const zoneModels=[];
@@ -1508,6 +1573,8 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base){
         beltSegments.push({orientation:"v",axis:zone.x+pos,start:zone.y,end:zone.y+zone.h,zoneId:zone.id,pileLength:zone.pileLength||CONFIG.ground.pileLength,reason:"joist-support"});
       }
     }
+
+    beltSegments.push(...supportFrameTieBelts(zone,direction,beltLayout,hasHouse,houseSide));
 
     zoneModels.push({
       ...zone,
@@ -1824,7 +1891,7 @@ function buildAlgorithmDiagnostics(model){
       ? model.zonedStructure.zones.map(z=>
           z.name+": "+z.beltLayout.count+" ряда, шаг "+fmt(z.beltLayout.step)+" мм, свес лаг "+
           fmt(z.beltLayout.edgeStart)+" / "+fmt(z.beltLayout.edgeEnd)+" мм"
-        ).join(" | ")+". Предел шага "+CONFIG.belt.maxSpacing+" мм; свес лаг ≤ "+CONFIG.joist.maxEdgeCantilever+" мм."
+        ).join(" | ")+". Предел шага "+CONFIG.belt.maxSpacing+" мм; свес лаг ≤ "+CONFIG.joist.maxEdgeCantilever+" мм. Свободные торцы несущих линий связаны поперечным 80×80×2; со стороны примыкания к дому замыкающий профиль не добавляется."
       : "Рядов: "+beltLayout.count+
         ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
   });
@@ -1909,7 +1976,7 @@ function calculate(){
 
   const joists=buildJoists(run,allSeams,joistStep);
   const zonedStructure=projectZones.length
-    ? buildZonedStructure(projectZones,direction,seamPatterns,joistStep,base)
+    ? buildZonedStructure(projectZones,direction,seamPatterns,joistStep,base,hasHouse,houseSide)
     : null;
 
   const joistLengthM=across/1000;
@@ -2160,7 +2227,9 @@ function loadControlScheme(){
   polygonViewBoxLock=null;
 
   $("shapeMode").value="free";
-  $("dir").value="l";
+  $("dir").value="w";
+  $("hasHouse").checked=true;
+  $("houseSide").value="top";
   updateControls();
   calculate();
   setTimeout(fitCanvasView,60);
