@@ -178,6 +178,25 @@ function renderPolygonEditor(){
 
   const ns="http://www.w3.org/2000/svg";
 
+  // Периметральный 80×80 рисуем в той же SVG-системе координат,
+  // что и редактируемый контур. Так наклонные стороны не перекрываются
+  // чёрной линией контура и остаются визуально видимыми.
+  const perimeterBelts=lastModel?.shapeMode==="free"
+    ? (lastModel?.polygonStructure?.perimeterSegments||[])
+    : [];
+
+  if($("showBelts")?.checked && perimeterBelts.length){
+    for(const seg of perimeterBelts){
+      const line=document.createElementNS(ns,"line");
+      line.setAttribute("x1",String(seg.absX1));
+      line.setAttribute("y1",String(seg.absY1));
+      line.setAttribute("x2",String(seg.absX2));
+      line.setAttribute("y2",String(seg.absY2));
+      line.setAttribute("class","perimeterSupportSvg");
+      svg.appendChild(line);
+    }
+  }
+
   if(polygonPoints.length>=2){
     const shape=document.createElementNS(ns,polygonClosed?"polygon":"polyline");
     shape.setAttribute("points",polygonPoints.map(p=>p.x+","+p.y).join(" "));
@@ -1263,6 +1282,10 @@ function polygonFreePerimeterSegments(hasHouse=false,houseSide="top"){
       y1:p.y-b.minY,
       x2:q.x-b.minX,
       y2:q.y-b.minY,
+      absX1:p.x,
+      absY1:p.y,
+      absX2:q.x,
+      absY2:q.y,
       length:len,
       reason:"perimeter",
       pileLength:CONFIG.ground.pileLength
@@ -2364,7 +2387,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,
-    algorithmVersion:"2.2"
+    algorithmVersion:"2.3"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
