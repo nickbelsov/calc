@@ -36,6 +36,32 @@ const CONFIG = {
     max: 150
   },
 
+  engineering: {
+    designLiveLoadKgM2: 500,
+    deckingDeadLoadKgM2: 25,
+    deckingDeadLoadFactor: 1.10,
+    gravity: 9.81,
+    elasticModulusMPa: 200000,
+    steelRyMPa: 230,
+    deflectionRatio: 200,
+    terracePointLoadKN: 1.0,
+    terracePointLoadFactor: 1.2,
+    sections: {
+      joist40x40x2: {
+        I_mm4: 70700,
+        W_mm3: 3530,
+        massKgM: 2.33,
+        source: "GOST 8639"
+      },
+      belt80x80x2: {
+        I_mm4: 633152,
+        W_mm3: 15828.8,
+        massKgM: 4.90,
+        source: "geometric"
+      }
+    }
+  },
+
   rules: {
     boardStockIsDiscrete: true,
     boardStockCannotBeRejoined: true,
