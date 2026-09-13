@@ -2844,7 +2844,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.8"
+    algorithmVersion:"3.9"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -2875,7 +2875,7 @@ function updateControls(){
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","boardStockLength_unused3000","boardStockLength_unused4000","boardStockLength_unused6000","useWarehouse","warehouseProduct"].forEach(id=>{
+["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","boardStockLength","useWarehouse","warehouseProduct"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
