@@ -346,20 +346,18 @@ function getSelectedWarehouseProduct(){
 }
 
 function getAllowedBoardLengths(){
-  const values=[];
+  const selected=Number($("boardStockLength")?.value||4000);
   const useWarehouse=$("useWarehouse")?.checked;
   const product=getSelectedWarehouseProduct();
 
-  const permitted=len=>{
-    if(!useWarehouse || !product) return true;
-    return (product.variants?.[len]?.stock||0)>0;
-  };
+  if(useWarehouse && product){
+    const stock=product.variants?.[selected]?.stock||0;
+    return stock>0 ? [selected] : [];
+  }
 
-  if($("allow3000")?.checked && permitted(3000)) values.push(3000);
-  if($("allow4000")?.checked && permitted(4000)) values.push(4000);
-  if($("allow6000")?.checked && permitted(6000)) values.push(6000);
-  return values;
+  return [selected];
 }
+
 
 function renderWarehouseUI(){
   const api=window.NIMTECH_INVENTORY;
@@ -392,13 +390,19 @@ function renderWarehouseUI(){
     return '<span class="'+cls+'"><b>'+(len/1000)+' м</b><small>'+v.stock+' шт.</small></span>';
   }).join("");
 
-  [["allow3000",3000],["allow4000",4000],["allow6000",6000]].forEach(([id,len])=>{
-    const el=$(id);
-    if(!el) return;
-    const unavailable=$("useWarehouse")?.checked && ((p.variants?.[len]?.stock||0)<=0);
-    el.disabled=unavailable;
-    if(unavailable) el.checked=false;
-  });
+  const lengthSelect=$("boardStockLength");
+  if(lengthSelect){
+    [...lengthSelect.options].forEach(option=>{
+      const len=Number(option.value);
+      option.disabled=$("useWarehouse")?.checked && ((p.variants?.[len]?.stock||0)<=0);
+    });
+
+    const selected=lengthSelect.selectedOptions?.[0];
+    if(selected?.disabled){
+      const firstAvailable=[...lengthSelect.options].find(o=>!o.disabled);
+      if(firstAvailable) lengthSelect.value=firstAvailable.value;
+    }
+  }
 }
 
 function renderStockCheck(boardRows){
@@ -2840,7 +2844,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.7"
+    algorithmVersion:"3.8"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -2871,7 +2875,7 @@ function updateControls(){
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","allow3000","allow4000","allow6000","useWarehouse","warehouseProduct"].forEach(id=>{
+["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","boardStockLength_unused3000","boardStockLength_unused4000","boardStockLength_unused6000","useWarehouse","warehouseProduct"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
