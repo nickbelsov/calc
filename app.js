@@ -1935,10 +1935,17 @@ function renderBoardRows(parent,model){
   const {direction,run,across,boardRows}=model;
   const w=parent.clientWidth,h=parent.clientHeight;
 
-  const addPiece=(piece,rowStart,rowSize,cursor,isFirstInSegment)=>{
+  const addPiece=(piece,rowStart,rowSize,cursor,index,count)=>{
+    // Расчётная геометрия сохраняет реальный 3-мм зазор.
+    // Для визуала заполняем половину зазора с каждой стороны,
+    // чтобы на масштабе он не выглядел как широкая белая полоса.
+    const halfGap=CONFIG.boardGap/2;
+    const visualStart=Math.max(0,cursor-(index>0?halfGap:0));
+    const visualEnd=Math.min(run,cursor+piece.length+(index<count-1?halfGap:0));
+
     const el=document.createElement("div");
     el.className="boardPiece "+(direction==="l"?"board-h":"board-v")+(piece.reused?" alt":"");
-    const a=cursor/run,b=(cursor+piece.length)/run;
+    const a=visualStart/run,b=visualEnd/run;
 
     if(direction==="l"){
       Object.assign(el.style,{
@@ -1957,8 +1964,6 @@ function renderBoardRows(parent,model){
     }
 
     parent.appendChild(el);
-
-
   };
 
   if(boardRows.polygon){
@@ -1970,7 +1975,7 @@ function renderBoardRows(parent,model){
       row.segments.forEach(seg=>{
         let cursor=seg.start;
         seg.pieces.forEach((piece,index)=>{
-          addPiece(piece,rowStart,rowSize,cursor,index===0);
+          addPiece(piece,rowStart,rowSize,cursor,index,seg.pieces.length);
           cursor+=piece.length;
           if(index<seg.pieces.length-1) cursor+=CONFIG.boardGap;
         });
@@ -1979,7 +1984,6 @@ function renderBoardRows(parent,model){
     return;
   }
 
-  const rowCount=Math.max(1,boardRows.rows.length);
   const boardWidth=+$("boardModule")?.value||CONFIG.defaultBoardModule;
   const pitch=boardWidth+CONFIG.boardGap;
   boardRows.rows.forEach((row,rowIndex)=>{
@@ -1987,7 +1991,7 @@ function renderBoardRows(parent,model){
     const rowSize=Math.min(1,boardWidth/across);
     let cursor=0;
     row.pieces.forEach((piece,index)=>{
-      addPiece(piece,rowStart,rowSize,cursor,index===0);
+      addPiece(piece,rowStart,rowSize,cursor,index,row.pieces.length);
       cursor+=piece.length;
       if(index<row.pieces.length-1) cursor+=CONFIG.boardGap;
     });
@@ -2845,7 +2849,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.1"
+    algorithmVersion:"4.2"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
