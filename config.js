@@ -2,6 +2,7 @@ const CONFIG = {
   algorithmVersion: "2.0",
   boardLengths: [3000, 4000, 6000],
   defaultBoardModule: 150,
+  boardGap: 3,
 
   joist: {
     size: "40×40×2",
@@ -69,6 +70,7 @@ const CONFIG = {
     metalCanBeCutAndWelded: true,
     metalPurchaseMultiple: 6000,
     preferredLayout: "half",
+    boardGapAlwaysMm: 3,
     houseSidePileOffset: 400,
     freeEdgeSupportCantileverMax: 200
   }
