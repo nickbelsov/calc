@@ -2544,6 +2544,18 @@ function renderPlan(model){
       for(const seg of zonedStructure.joistSegments){
         addAbsoluteSegment(layer,seg,modelL,modelW,"joistLine"+(seg.type==="seam"?" double":""));
       }
+    }else if(model.shapeMode==="free" && polygonClosed){
+      const addPolygonJoist=function(pos,cls){
+        const spans=polygonCrosslineSegments(pos,direction,modelL,modelW);
+        for(const span of spans){
+          const seg=direction==="l"
+            ? {orientation:"v",axis:pos,start:span.start,end:span.start+span.length}
+            : {orientation:"h",axis:pos,start:span.start,end:span.start+span.length};
+          addAbsoluteSegment(layer,seg,modelL,modelW,cls);
+        }
+      };
+      for(const pos of joists.regular) addPolygonJoist(pos,"joistLine");
+      for(const pos of joists.seam) addPolygonJoist(pos,"joistLine double");
     }else{
       for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
       for(const pos of joists.seam) addLine(layer,"joistLine double",direction,pos,run,true);
@@ -3191,9 +3203,9 @@ function calculate(){
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
-    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
+    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,shapeMetrics,
     pricing:{boardCost:boardCostKnown?boardCost:null,joistCost,beltCost,pileCost,total:knownSubtotal},
-    algorithmVersion:"5.5"
+    algorithmVersion:"5.6"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3479,8 +3491,15 @@ async function pdfCapturePlan(kind){
   var saved={};
   ids.forEach(function(id){ saved[id]=$(id).checked; });
   var oldScale=viewScale, oldX=viewX, oldY=viewY, was3d=document.body.classList.contains("view3d");
+  var oldPolygonViewBoxLock=polygonViewBoxLock;
 
   try{
+    if(lastModel.shapeMode==="free" && polygonClosed && polygonPoints.length>=3){
+      var pb=polygonBounds(polygonPoints);
+      var pw=Math.max(1,pb.maxX-pb.minX), ph=Math.max(1,pb.maxY-pb.minY);
+      var pm=Math.max(450,Math.max(pw,ph)*0.10);
+      polygonViewBoxLock=(pb.minX-pm)+" "+(pb.minY-pm)+" "+(pw+pm*2)+" "+(ph+pm*2);
+    }
     document.body.classList.remove("view3d");
     if(kind==="boards"){
       $("showBoards").checked=true; $("showJoists").checked=false; $("showBelts").checked=false; $("showPiles").checked=false;
@@ -3506,6 +3525,7 @@ async function pdfCapturePlan(kind){
     return canvas.toDataURL("image/png");
   }finally{
     ids.forEach(function(id){ $(id).checked=saved[id]; });
+    polygonViewBoxLock=oldPolygonViewBoxLock;
     viewScale=oldScale; viewX=oldX; viewY=oldY;
     if(was3d) document.body.classList.add("view3d");
     renderPlan(lastModel);
@@ -3602,7 +3622,9 @@ async function pdfDeckPage(deckImage,threeDImage){
   ctx.strokeRect(rightX,730,rightW,300);
 
   var info=pdfBoardInfo();
-  var shapeArea=lastModel && lastModel.shapeMetrics ? lastModel.shapeMetrics.areaM2 : null;
+  var shapeArea=lastModel && lastModel.shapeMetrics
+    ? lastModel.shapeMetrics.areaM2
+    : ($("shapeMode") && $("shapeMode").value!=="rect" ? getPolygonMetrics().areaM2 : ((+$("L").value||0)*(+$("W").value||0)/1e6));
   var lines=[
     ["Доска",info.name+" "+info.width+"×"+info.height+" мм"],
     ["Направление",$("dir") && $("dir").selectedOptions[0] ? $("dir").selectedOptions[0].textContent : "—"],
@@ -3632,7 +3654,7 @@ async function pdfDeckPage(deckImage,threeDImage){
 async function pdfDrawingPage(title,subtitle,imageData,legend){
   var page=await pdfPageBase(title,subtitle), ctx=page.ctx;
   var img=await pdfLoadImage(imageData);
-  var x=72,y=270,w=1540,h=780;
+  var x=92,y=285,w=1500,h=745;
   ctx.strokeStyle="#dde1e3"; ctx.strokeRect(x,y,w,h);
   var scale=Math.min((w-30)/img.width,(h-30)/img.height);
   var dw=img.width*scale, dh=img.height*scale;
