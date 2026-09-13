@@ -52,33 +52,28 @@
           <option value="oshape">O-образная</option>
           <option value="circle">Круглая</option>
         </select>
-      </div>
-    </div>
 
-    <div class="setupSection">
-      <div class="stepNo">02</div>
-      <div class="stepBody">
-        <h2>Размеры</h2>
-        <div id="rectControls" class="sizeGrid">
-          <div><label>Длина, мм</label><input id="L" type="number" value="6200" min="1000"></div>
-          <div><label>Ширина, мм</label><input id="W" type="number" value="3800" min="1000"></div>
-        </div>
-        <div id="freeControls" class="hidden">
-          <small>Свободный режим: нарисуй любой замкнутый контур прямо на рабочем поле. Габариты определяются самим контуром.</small>
-          <button id="drawPolygon" type="button" class="secondaryBtn">Нарисовать заново</button>
-          <button id="resetPolygon" type="button" class="secondaryBtn">Прямоугольный контур</button>
-          <button id="loadControlScheme" type="button" class="secondaryBtn">Контрольная схема 4500×3500 + 600×1200</button>
-        </div>
         <label>Направление доски</label>
         <select id="dir">
           <option value="l">По длине</option>
           <option value="w">По ширине</option>
         </select>
+
+        <div id="rectControls" class="hidden">
+          <input id="L" type="hidden" value="6200">
+          <input id="W" type="hidden" value="3800">
+        </div>
+        <div id="freeControls" class="hidden">
+          <small>Нарисуй любой замкнутый контур прямо на рабочем поле. Размеры определяются самим контуром.</small>
+          <button id="drawPolygon" type="button" class="secondaryBtn">Нарисовать заново</button>
+          <button id="resetPolygon" type="button" class="secondaryBtn">Прямоугольный контур</button>
+          <button id="loadControlScheme" type="button" class="secondaryBtn">Контрольная схема 4500×3500 + 600×1200</button>
+        </div>
       </div>
     </div>
 
     <div class="setupSection">
-      <div class="stepNo">03</div>
+      <div class="stepNo">02</div>
       <div class="stepBody">
         <h2>Конструкция</h2>
         <label>Тип основания</label>
@@ -117,7 +112,7 @@
     </div>
 
     <div class="setupSection" id="materials">
-      <div class="stepNo">04</div>
+      <div class="stepNo">03</div>
       <div class="stepBody">
         <h2>Материалы</h2>
 
@@ -296,7 +291,7 @@
 
 <script src="config.js?v=20260913-1105"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1140"></script>
+<script src="app.js?v=20260913-1150"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
