@@ -848,19 +848,61 @@ function packPiecesIntoStock(pieceLengths,allowedLengths){
   };
 }
 
+function buildHalfRowLengths(runLength,stockLength,shifted=false){
+  const gap=CONFIG.boardGap;
+  const lengths=[];
+  let remaining=runLength;
+
+  if(remaining<=0.5) return lengths;
+
+  const firstTarget=shifted ? stockLength/2 : stockLength;
+  const first=Math.min(firstTarget,remaining);
+  lengths.push(first);
+  remaining-=first;
+
+  while(remaining>0.5){
+    remaining-=gap;
+    if(remaining<=0.5) break;
+
+    const used=Math.min(stockLength,remaining);
+    lengths.push(used);
+    remaining-=used;
+  }
+
+  return lengths;
+}
+
+function checkerboardAxesForSpan(start,runLength,stockLength,shifted=false,domainLength=runLength){
+  const gap=CONFIG.boardGap;
+  const period=stockLength+gap;
+  const firstOffset=(shifted ? stockLength/2 : stockLength)+gap/2;
+  const out=[];
+
+  // Расширяем регулярную систему осей в обе стороны от опорного ряда,
+  // чтобы любой более короткий/смещённый ряд произвольного контура
+  // тоже никогда не требовал деталь длиннее выбранной складской доски.
+  let x=start+firstOffset;
+  while(x-period>0) x-=period;
+
+  for(;x<domainLength-1;x+=period){
+    if(x>1) out.push(x);
+  }
+
+  return uniquePositions(out);
+}
+
 function buildRowsHalf(runLength,rowCount,allowedLengths){
   const rows=[];
   const allPieceLengths=[];
   const pieceRefs=[];
-  const gap=CONFIG.boardGap;
+  const stockLength=Math.max(...allowedLengths);
 
   for(let r=0;r<rowCount;r++){
-    const pieceCount=r%2===0?2:3;
-    const materialSpan=Math.max(0,runLength-gap*(pieceCount-1));
-
-    const lengths = r%2===0
-      ? [materialSpan/2,materialSpan/2]
-      : [materialSpan/4,materialSpan/2,materialSpan/4];
+    const lengths=buildHalfRowLengths(
+      runLength,
+      stockLength,
+      r%2===1
+    );
 
     const row=makeRowFromLengths(lengths);
     rows.push(row);
@@ -899,7 +941,8 @@ function buildRowsHalf(runLength,rowCount,allowedLengths){
     finalWaste:packed.finalWaste,
     offcuts:packed.offcuts,
     bins:packed.bins,
-    warning:"Равномерная шахматка: технологический зазор между торцами ДПК 3 мм. Ряд A = 1/2 + 1/2; ряд B = 1/4 + 1/2 + 1/4."
+    checkerboardStockLength:stockLength,
+    warning:"Равномерная шахматка 1/2 строится от выбранной складской длины "+fmt(stockLength)+" мм: соседний ряд смещён на половину этой длины. Между торцами ДПК — 3 мм."
   };
 }
 
@@ -1132,7 +1175,7 @@ function getLongestPolygonSegment(boardRows){
   return best;
 }
 
-function getPolygonSeamPatterns(boardRows, mode){
+function getPolygonSeamPatterns(boardRows,mode,allowedLengths,runLength){
   const master=getLongestPolygonSegment(boardRows);
   if(!master) return {even:[],odd:[],all:[]};
 
@@ -1140,21 +1183,27 @@ function getPolygonSeamPatterns(boardRows, mode){
   const len=master.length;
 
   if(mode==="half"){
-    // Равномерная шахматка:
-    // чётные ряды: 1/2 + 1/2
-    // нечётные: 1/4 + 1/2 + 1/4
-    const even=[start+len/2];
-    const odd=[start+len/4,start+3*len/4];
+    const stockLength=Math.max(...allowedLengths);
+
+    // Ряд A: полная складская доска, далее полные доски + остаток.
+    // Ряд B: старт с 1/2 складской доски, далее полные доски + остаток.
+    // Оси продолжаем через всю площадку, чтобы не плодить локальные
+    // стыковые лаги в каждом укороченном ряду.
+    const even=checkerboardAxesForSpan(
+      start,len,stockLength,false,runLength
+    );
+    const odd=checkerboardAxesForSpan(
+      start,len,stockLength,true,runLength
+    );
 
     return {
       even,
       odd,
-      all:uniquePositions([...even,...odd])
+      all:uniquePositions([...even,...odd]),
+      stockLength
     };
   }
 
-  // Для остальных режимов пока сохраняем единую систему осей
-  // по самому длинному ряду.
   let bestRowSegment=null;
   for(const row of boardRows.rows){
     for(const seg of row.segments||[]){
@@ -2439,7 +2488,9 @@ function buildAlgorithmDiagnostics(model){
     const bSeams=shapeMode==="free" ? seamPatterns.odd : [run/4,3*run/4];
     lines.push({
       title:"Шахматка",
-      text:"Повторяются 2 ряда. Оси A: "+(aSeams.length?aSeams.map(fmt).join(", ")+" мм":"нет")+
+      text:"Шахматка от складской длины "+fmt(seamPatterns.stockLength||Math.max(...getAllowedBoardLengths()))+
+        " мм. Ряд B смещён на 1/2 доски. Оси A: "+
+        (aSeams.length?aSeams.map(fmt).join(", ")+" мм":"нет")+
         ". Оси B: "+(bSeams.length?bSeams.map(fmt).join(", ")+" мм":"нет")+"."
     });
   }
@@ -2578,7 +2629,7 @@ function calculate(){
   let allSeams=[];
 
   if(shapeMode==="free" && boardRows.polygon){
-    seamPatterns=getPolygonSeamPatterns(boardRows,layoutMode);
+    seamPatterns=getPolygonSeamPatterns(boardRows,layoutMode,allowedLengths,run);
     boardRows=applyPolygonSeamPatterns(boardRows,seamPatterns,allowedLengths);
     allSeams=seamPatterns.all;
   }else{
@@ -2789,7 +2840,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.6"
+    algorithmVersion:"3.7"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
