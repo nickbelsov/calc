@@ -1457,6 +1457,65 @@ function polygonEdgeLength(a,b){
   return Math.hypot(b.x-a.x,b.y-a.y);
 }
 
+function selectedHouseEdge(houseSide){
+  const explicitIndex=resolveHouseEdgeIndex(houseSide);
+  if(explicitIndex>=0 && polygonClosed && polygonPoints.length>=2){
+    const p=polygonPoints[explicitIndex];
+    const q=polygonPoints[(explicitIndex+1)%polygonPoints.length];
+    return {p,q,index:explicitIndex};
+  }
+
+  if(!polygonClosed||polygonPoints.length<2) return null;
+  const b=polygonBounds(polygonPoints);
+  const tol=Math.max(2,Math.max(b.maxX-b.minX,b.maxY-b.minY)*0.002);
+
+  for(let i=0;i<polygonPoints.length;i++){
+    const p=polygonPoints[i],q=polygonPoints[(i+1)%polygonPoints.length];
+    if(houseSide==="top" && Math.abs(p.y-b.minY)<=tol && Math.abs(q.y-b.minY)<=tol) return {p,q,index:i};
+    if(houseSide==="bottom" && Math.abs(p.y-b.maxY)<=tol && Math.abs(q.y-b.maxY)<=tol) return {p,q,index:i};
+    if(houseSide==="left" && Math.abs(p.x-b.minX)<=tol && Math.abs(q.x-b.minX)<=tol) return {p,q,index:i};
+    if(houseSide==="right" && Math.abs(p.x-b.maxX)<=tol && Math.abs(q.x-b.maxX)<=tol) return {p,q,index:i};
+  }
+  return null;
+}
+
+function pointToSegmentDistance(point,a,b){
+  const vx=b.x-a.x,vy=b.y-a.y;
+  const wx=point.x-a.x,wy=point.y-a.y;
+  const vv=vx*vx+vy*vy;
+  if(vv<1e-9) return Math.hypot(point.x-a.x,point.y-a.y);
+  const t=Math.max(0,Math.min(1,(wx*vx+wy*vy)/vv));
+  const px=a.x+t*vx,py=a.y+t*vy;
+  return Math.hypot(point.x-px,point.y-py);
+}
+
+function endpointPileLayoutWithHouse(length,maxSpacing,houseAtStart,houseAtEnd){
+  const offset=Math.min(CONFIG.ground.houseOffset,Math.max(0,length/2));
+
+  if(houseAtStart && houseAtEnd){
+    if(length<=offset*2){
+      return {
+        intervals:0,
+        count:1,
+        step:0,
+        positions:[length/2],
+        houseOffsetApplied:true,
+        houseOffset:Math.min(offset,length/2)
+      };
+    }
+    const usable=length-offset*2;
+    const intervals=Math.max(1,Math.ceil(usable/maxSpacing));
+    const step=usable/intervals;
+    const positions=[];
+    for(let i=0;i<=intervals;i++) positions.push(offset+i*step);
+    return {intervals,count:positions.length,step,positions,houseOffsetApplied:true,houseOffset:offset};
+  }
+
+  if(houseAtStart) return equalLayoutWithHouseOffset(length,maxSpacing,offset,true);
+  if(houseAtEnd) return equalLayoutWithHouseOffset(length,maxSpacing,offset,false);
+  return endpointPileLayout(length,maxSpacing);
+}
+
 function polygonFreePerimeterSegments(hasHouse=false,houseSide="top"){
   if(!polygonClosed||polygonPoints.length<3) return [];
   const b=polygonBounds(polygonPoints);
@@ -1822,11 +1881,37 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
   let beltMeters=0;
   const internalPilePoints=[];
 
+  const houseEdge=hasHouse ? selectedHouseEdge(houseSide) : null;
+  const houseTol=8;
+
   for(const belt of belts){
     for(const seg of belt.segments){
-      const layout=endpointPileLayout(seg.length,limits.pileSpacingMax);
+      let houseAtStart=false,houseAtEnd=false;
+
+      if(houseEdge){
+        const startPoint=direction==="l"
+          ? {x:seg.start,y:belt.axis}
+          : {x:belt.axis,y:seg.start};
+        const endPoint=direction==="l"
+          ? {x:seg.start+seg.length,y:belt.axis}
+          : {x:belt.axis,y:seg.start+seg.length};
+
+        houseAtStart=pointToSegmentDistance(startPoint,houseEdge.p,houseEdge.q)<=houseTol;
+        houseAtEnd=pointToSegmentDistance(endPoint,houseEdge.p,houseEdge.q)<=houseTol;
+      }
+
+      const layout=endpointPileLayoutWithHouse(
+        seg.length,
+        limits.pileSpacingMax,
+        houseAtStart,
+        houseAtEnd
+      );
+
       seg.piles=layout.positions.map(p=>seg.start+p);
       seg.pileStep=layout.step;
+      seg.houseOffsetApplied=!!layout.houseOffsetApplied;
+      seg.houseAtStart=houseAtStart;
+      seg.houseAtEnd=houseAtEnd;
 
       beltMeters+=seg.length/1000;
       if(layout.step) pileSteps.push(layout.step);
@@ -2590,6 +2675,13 @@ function buildAlgorithmDiagnostics(model){
         ", фактический шаг ≈ "+fmt(beltLayout.step)+" мм, предел "+CONFIG.belt.maxSpacing+" мм."
   });
 
+  if(base==="ground" && $("hasHouse")?.checked){
+    lines.push({
+      title:"Отступ свай от дома",
+      text:"По выбранной стороне примыкания крайние сваи на поясах 80×80×2 отнесены от стены минимум на "+CONFIG.ground.houseOffset+" мм."
+    });
+  }
+
   if(base==="ground" && pileLayout){
     const houseException="";
     lines.push({
@@ -2875,7 +2967,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.5"
+    algorithmVersion:"4.6"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
