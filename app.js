@@ -168,6 +168,17 @@ function updatePolygonEditorViewBox(svg){
   svg.setAttribute("viewBox",b.minX+" "+b.minY+" "+bw+" "+bh);
 }
 
+function polygonVertexName(index){
+  let n=index+1;
+  let out="";
+  while(n>0){
+    n--;
+    out=String.fromCharCode(65+(n%26))+out;
+    n=Math.floor(n/26);
+  }
+  return out;
+}
+
 function renderPolygonEditor(){
   const svg=$("polygonEditor");
   if(!svg || $("shapeMode").value==="rect") return;
@@ -246,7 +257,8 @@ function renderPolygonEditor(){
 
       const labelX=mx+nx*labelOffset;
       const labelY=my+ny*labelOffset;
-      const labelText=fmt(length)+" мм";
+      const sideName=polygonVertexName(i)+"–"+polygonVertexName((i+1)%polygonPoints.length);
+      const labelText=sideName+"  "+fmt(length)+" мм";
       const bg=document.createElementNS(ns,"rect");
       const approxW=Math.max(labelSize*2.15,labelText.length*labelSize*.56);
       const approxH=labelSize*1.32;
@@ -300,6 +312,16 @@ function renderPolygonEditor(){
       });
     }
     svg.appendChild(c);
+
+    const vertexText=document.createElementNS(ns,"text");
+    vertexText.setAttribute("x",p.x);
+    vertexText.setAttribute("y",p.y);
+    vertexText.setAttribute("text-anchor","middle");
+    vertexText.setAttribute("dominant-baseline","central");
+    vertexText.setAttribute("font-size",String(handleR*1.05));
+    vertexText.setAttribute("class","vertexLabel");
+    vertexText.textContent=polygonVertexName(i);
+    svg.appendChild(vertexText);
   });
 }
 
@@ -2849,7 +2871,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.3"
+    algorithmVersion:"4.4"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
