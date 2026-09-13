@@ -37,6 +37,12 @@ const CONFIG = {
     max: 100
   },
 
+  concreteSupportSpecs: {
+    rebar: { diameterMm: 10, heightMm: 100 },
+    rubber: { widthMm: 100, depthMm: 100, thicknessMm: 5 },
+    plastic: { type: "adjustable-screw" }
+  },
+
   engineering: {
     designLiveLoadKgM2: 500,
     deckingDeadLoadKgM2: 25,
