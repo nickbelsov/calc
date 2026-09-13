@@ -1143,3 +1143,44 @@ body.rightCollapsed .result{
   letter-spacing:0!important;
   cursor:pointer;
 }
+
+/* Rectangle uses same A-B / B-C / C-D / D-A language as polygon mode */
+.rectSideLabel{
+  position:absolute;
+  z-index:30;
+  padding:3px 8px;
+  border:1.25px solid #2f8fca;
+  border-radius:5px;
+  background:#fff;
+  color:#197bb8;
+  font-size:12px;
+  line-height:1.1;
+  font-weight:650;
+  white-space:nowrap;
+  pointer-events:none;
+}
+.rectSideLabel.top{left:50%;top:-14px;transform:translate(-50%,-100%)}
+.rectSideLabel.bottom{left:50%;bottom:-14px;transform:translate(-50%,100%)}
+.rectSideLabel.left{left:-14px;top:50%;transform:translate(-100%,-50%) rotate(-90deg)}
+.rectSideLabel.right{right:-14px;top:50%;transform:translate(100%,-50%) rotate(90deg)}
+.rectVertexLabel{
+  position:absolute;
+  z-index:31;
+  width:24px;
+  height:24px;
+  border-radius:50%;
+  background:#2f8fca;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  font-weight:700;
+  line-height:1;
+  box-shadow:0 0 0 2px #fff;
+  pointer-events:none;
+}
+.rectVertexLabel.a{left:0;top:0;transform:translate(-50%,-50%)}
+.rectVertexLabel.b{right:0;top:0;transform:translate(50%,-50%)}
+.rectVertexLabel.c{right:0;bottom:0;transform:translate(50%,50%)}
+.rectVertexLabel.d{left:0;bottom:0;transform:translate(-50%,50%)}
