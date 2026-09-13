@@ -2114,15 +2114,29 @@ function renderEngineeringDimensions(layer,model){
   const L=+$("L").value||6200;
   const W=+$("W").value||3800;
 
-  const dx=document.createElement("div");
-  dx.className="engineeringDimension x";
-  dx.innerHTML="<span>"+fmt(L)+" мм</span>";
-  layer.appendChild(dx);
+  [
+    {cls:"top",text:"A–B  "+fmt(L)+" мм"},
+    {cls:"right",text:"B–C  "+fmt(W)+" мм"},
+    {cls:"bottom",text:"C–D  "+fmt(L)+" мм"},
+    {cls:"left",text:"D–A  "+fmt(W)+" мм"}
+  ].forEach(item=>{
+    const el=document.createElement("div");
+    el.className="rectSideLabel "+item.cls;
+    el.textContent=item.text;
+    layer.appendChild(el);
+  });
 
-  const dy=document.createElement("div");
-  dy.className="engineeringDimension y";
-  dy.innerHTML="<span>"+fmt(W)+" мм</span>";
-  layer.appendChild(dy);
+  [
+    {name:"A",cls:"a"},
+    {name:"B",cls:"b"},
+    {name:"C",cls:"c"},
+    {name:"D",cls:"d"}
+  ].forEach(v=>{
+    const el=document.createElement("div");
+    el.className="rectVertexLabel "+v.cls;
+    el.textContent=v.name;
+    layer.appendChild(el);
+  });
 
   const mark=document.createElement("div");
   mark.className="planCornerMark";
@@ -2967,7 +2981,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.6"
+    algorithmVersion:"4.7"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
