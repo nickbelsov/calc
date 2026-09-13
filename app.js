@@ -2420,6 +2420,82 @@ function renderZoneOutlines(parent,zoned,L,W){
   });
 }
 
+function pointInPolygonMm(point){
+  if(!polygonClosed||polygonPoints.length<3) return true;
+  let inside=false;
+  for(let i=0,j=polygonPoints.length-1;i<polygonPoints.length;j=i++){
+    const pi=polygonPoints[i],pj=polygonPoints[j];
+    const hit=((pi.y>point.y)!==(pj.y>point.y)) &&
+      (point.x < (pj.x-pi.x)*(point.y-pi.y)/((pj.y-pi.y)||1e-9)+pi.x);
+    if(hit) inside=!inside;
+  }
+  return inside;
+}
+
+function buildConcreteStructure(L,W,direction,shapeMode,areaM2){
+  const tieStepMax=CONFIG.rules.concreteTieStepMaxMm||1500;
+  const supportCount=Math.ceil(areaM2*(CONFIG.rules.concreteSupportsPerM2||5));
+  const across=direction==="l"?W:L;
+  const tieLayout=equalLayout(across,tieStepMax);
+  const tieSegments=[];
+
+  for(const pos of tieLayout.positions){
+    if(shapeMode==="free" && polygonClosed){
+      const spans=polygonScanlineSegments(pos,direction,L,W);
+      for(const span of spans){
+        if(direction==="l"){
+          tieSegments.push({orientation:"h",axis:pos,start:span.start,end:span.start+span.length,type:"concrete-tie"});
+        }else{
+          tieSegments.push({orientation:"v",axis:pos,start:span.start,end:span.start+span.length,type:"concrete-tie"});
+        }
+      }
+    }else{
+      if(direction==="l"){
+        tieSegments.push({orientation:"h",axis:pos,start:0,end:L,type:"concrete-tie"});
+      }else{
+        tieSegments.push({orientation:"v",axis:pos,start:0,end:W,type:"concrete-tie"});
+      }
+    }
+  }
+
+  const tieMeters=tieSegments.reduce((sum,seg)=>sum+(seg.end-seg.start)/1000,0);
+
+  // Равномерно распределяем расчётное количество опор по площади.
+  const supportPoints=[];
+  if(supportCount>0){
+    const b=shapeMode==="free"&&polygonClosed ? polygonBounds(polygonPoints) : {minX:0,minY:0,maxX:L,maxY:W};
+    let density=1;
+    while(supportPoints.length<supportCount && density<12){
+      supportPoints.length=0;
+      const aspect=Math.max(.1,L/Math.max(1,W));
+      const nx=Math.max(1,Math.ceil(Math.sqrt(supportCount*aspect)*density));
+      const ny=Math.max(1,Math.ceil(supportCount* density / nx));
+      for(let iy=0;iy<ny && supportPoints.length<supportCount;iy++){
+        for(let ix=0;ix<nx && supportPoints.length<supportCount;ix++){
+          const x=(ix+.5)/nx*L;
+          const y=(iy+.5)/ny*W;
+          if(shapeMode==="free"&&polygonClosed){
+            const abs={x:b.minX+x,y:b.minY+y};
+            if(!pointInPolygonMm(abs)) continue;
+          }
+          supportPoints.push({x,y});
+        }
+      }
+      density+=.35;
+    }
+  }
+
+  return {
+    supportCount,
+    supportPoints,
+    supportsPerM2:CONFIG.rules.concreteSupportsPerM2||5,
+    tieStep:tieLayout.step,
+    tiePositions:tieLayout.positions,
+    tieSegments,
+    tieMeters
+  };
+}
+
 function renderPlan(model){
   const terrace=$("terrace");
   const layer=$("constructionLayer");
@@ -2435,7 +2511,7 @@ function renderPlan(model){
     return;
   }
 
-  if($("showBelts").checked){
+  if($("showBelts").checked && base!=="concrete"){
     if(zonedStructure){
       for(const seg of zonedStructure.beltSegments){
         addAbsoluteSegment(layer,seg,modelL,modelW,"beltLine");
@@ -2462,6 +2538,12 @@ function renderPlan(model){
     }else{
       for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
       for(const pos of joists.seam) addLine(layer,"joistLine double",direction,pos,run,true);
+    }
+
+    if(base==="concrete" && model.concreteStructure){
+      for(const seg of model.concreteStructure.tieSegments){
+        addAbsoluteSegment(layer,seg,modelL,modelW,"joistLine concreteTie");
+      }
     }
   }
 
@@ -2505,6 +2587,17 @@ function renderPlan(model){
           layer.appendChild(dot);
         }
       }
+    }
+  }
+
+  if($("showPiles").checked && base==="concrete" && model.concreteStructure){
+    const w=layer.clientWidth,h=layer.clientHeight;
+    for(const p of model.concreteStructure.supportPoints){
+      const dot=document.createElement("div");
+      dot.className="concreteSupportDot";
+      dot.style.left=(p.x/modelL*w)+"px";
+      dot.style.top=(p.y/modelW*h)+"px";
+      layer.appendChild(dot);
     }
   }
 
@@ -2678,7 +2771,7 @@ function buildAlgorithmDiagnostics(model){
     });
   }
 
-  lines.push({
+  if(model.base!=="concrete") lines.push({
     title:"80×80×2",
     text:model.zonedStructure
       ? model.zonedStructure.zones.map(z=>
@@ -2709,6 +2802,16 @@ function buildAlgorithmDiagnostics(model){
       title:"Сваи",
       text:"Расставлены по каждому фактическому участку пояса; максимальный найденный шаг "+
         fmt(model.polygonStructure.maxPileStep)+" мм."
+    });
+  }
+
+  if(model.base==="concrete" && model.concreteStructure){
+    lines.push({
+      title:"Бетонное основание",
+      text:model.concreteSupportType+": "+model.concreteStructure.supportCount+" шт. по нормативу "+
+        model.concreteStructure.supportsPerM2+" шт./м². Пояс 80×80×2 отсутствует. "+
+        "Перемычки 40×40×2: "+fmt(model.concreteStructure.tieMeters,1)+" м.п., шаг "+
+        fmt(model.concreteStructure.tieStep)+" мм."
     });
   }
 
@@ -2749,6 +2852,7 @@ function calculate(){
   const direction=$("dir").value;
   const layoutMode=$("layoutMode").value;
   const base=$("base").value;
+  const concreteSupportType=$("concreteSupport")?.selectedOptions?.[0]?.textContent||"Резиновые подкладки";
   const boardModule=+$("boardModule").value||CONFIG.defaultBoardModule;
   const boardHeight=+$("boardHeight").value||23;
   const hasHouse=$("hasHouse").checked;
@@ -2799,7 +2903,7 @@ function calculate(){
     totalJoistMeters=zonedStructure.totalJoistMeters;
   }
 
-  const joistBuy=stockPurchase(totalJoistMeters);
+  let joistBuy=stockPurchase(totalJoistMeters);
 
   const totalBoards=Object.values(boardRows.purchases).reduce((a,b)=>a+b,0);
   const totalSeams=boardRows.rows.reduce((sum,row)=>sum+row.seams.length,0);
@@ -2858,6 +2962,17 @@ function calculate(){
   const beltBuy=stockPurchase(beltMeters);
 
   const shapeMetrics = shapeMode==="free" ? freeMetrics : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
+  const concreteStructure=base==="concrete"
+    ? buildConcreteStructure(L,W,direction,shapeMode,shapeMetrics.areaM2)
+    : null;
+
+  if(concreteStructure){
+    // На бетоне 80×80 не применяется. Перемычки 40×40 входят в общий метраж 40×40.
+    beltMeters=0;
+    totalPiles=0;
+    totalJoistMeters+=concreteStructure.tieMeters;
+    joistBuy=stockPurchase(totalJoistMeters);
+  }
   $("area").textContent=fmt(shapeMetrics.areaM2,2)+" м²";
   $("bboxOut").textContent=fmt(shapeMetrics.bboxL)+" × "+fmt(shapeMetrics.bboxW)+" мм";
   $("baseOut").textContent=baseNames[base];
@@ -2961,8 +3076,21 @@ function calculate(){
   }else{
     $("pilesPerBelt").textContent="—";
     $("pileStepOut").textContent="—";
-    $("supports").textContent="По выбранной технологии бетона";
-    $("pileInfo").textContent="Алгоритм бетонного основания будет рассчитан отдельно.";
+    $("checkPileStep").textContent="—";
+    $("supports").textContent=concreteStructure.supportCount+" шт. · "+concreteSupportType;
+    $("pileInfo").textContent=
+      concreteSupportType+": норматив "+concreteStructure.supportsPerM2+" шт./м². "+
+      "Опорный пояс 80×80×2 не применяется. Лаги 40×40×2 свариваются перемычками 40×40×2 "+
+      "в единую сетку с шагом не более "+fmt(concreteStructure.tieStep)+" мм.";
+
+    $("beltRows").textContent="не применяется";
+    $("beltStepOut").textContent="—";
+    $("checkBeltStep").textContent="—";
+    $("belt").textContent="0 м.п.";
+    $("beltPurchase").textContent="0 хлыстов / 0 м";
+
+    $("joists").textContent=fmt(totalJoistMeters,1)+" м.п.";
+    $("joistPurchase").textContent=joistBuy.sticks+" хлыстов / "+fmt(joistBuy.meters)+" м";
   }
 
   $("tech").textContent=base==="ground"
@@ -2971,7 +3099,7 @@ function calculate(){
         : "ДПК → профиль 40×40×2 → пояс 80×80×2 → сваи 2500 мм. Металл закупается хлыстами по 6 м.")
     : base==="roof"
       ? "Кровля / гидроизоляция: только регулируемые пластиковые опоры → металлический каркас → ДПК."
-      : "Бетон: резиновые подкладки, арматурные штыри или регулируемые пластиковые опоры.";
+      : "Бетон: ДПК → лаги 40×40×2 + сварные перемычки 40×40×2 с шагом ≤1500 мм → "+concreteSupportType+" из норматива 5 шт./м². Пояс 80×80×2 не применяется.";
 
   updateViewSize(L,W);
 
@@ -2980,8 +3108,8 @@ function calculate(){
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
-    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.7"
+    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,
+    algorithmVersion:"4.8"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3060,6 +3188,9 @@ function updateControls(){
 
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
+  document.querySelector(".beltLayer")?.classList.toggle("hidden",base==="concrete");
+  const supportChip=document.querySelector(".pileLayer span:last-child");
+  if(supportChip) supportChip.textContent=base==="concrete"?"Опоры":"Сваи";
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
   updateHouseSideOptions();
   const mode=$("shapeMode").value;
@@ -3076,7 +3207,7 @@ function updateControls(){
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","boardStockLength","useWarehouse","warehouseProduct"].forEach(id=>{
+["L","W","dir","layoutMode","base","concreteSupport","boardModule","boardHeight","hasHouse","houseSide","boardStockLength","useWarehouse","warehouseProduct"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
