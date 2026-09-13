@@ -87,4 +87,14 @@ const CONFIG = {
     concreteSupportsFollowJoists: true,
     roofSupportsFollowJoists: true
   }
+  ,pricing: {
+    source: "МойСклад · выгрузка 13.09.2026 · Цена РРЦ",
+    board: {
+      double: {3000:1350, 4000:1800, 6000:2700},
+      elite: {3000:1590, 4000:2120, 6000:3180}
+    },
+    profile40x40x2_per_m: 224,
+    profile80x80x2_per_m: 470,
+    pileD76_2500_with_head: 2990
+  }
 };
