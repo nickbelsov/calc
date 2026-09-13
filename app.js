@@ -661,6 +661,7 @@ function addPurchase(purchases, stock) {
 }
 
 function makeRowFromLengths(lengths, reusedFlags = []) {
+  const gap=CONFIG.boardGap;
   const pieces = lengths.map((length,i)=>({
     length,
     cutLength:length,
@@ -672,22 +673,30 @@ function makeRowFromLengths(lengths, reusedFlags = []) {
   const seams=[];
   for(let i=0;i<pieces.length-1;i++){
     x+=pieces[i].length;
-    seams.push(x);
+    seams.push(x+gap/2);
+    x+=gap;
   }
-  return {pieces,seams};
+  return {pieces,seams,gap};
 }
 
 function chooseAlignedPattern(runLength, allowedLengths) {
   const lengths=[...allowedLengths].sort((a,b)=>a-b);
+  const gap=CONFIG.boardGap;
   let best=null;
   if(!lengths.length) return null;
-  const maxPieces=Math.ceil(runLength/Math.min(...lengths))+2;
+  const maxPieces=Math.ceil(runLength/Math.min(...lengths))+3;
+
+  function coverage(sum,pieces){
+    return sum + Math.max(0,pieces-1)*gap;
+  }
 
   function walk(combo,sum,depth){
-    if(sum>=runLength){
-      const waste=sum-runLength;
-      const cand={combo:[...combo],sum,waste,pieces:combo.length};
-      if(!best || cand.waste<best.waste || (cand.waste===best.waste && cand.pieces<best.pieces)) best=cand;
+    const covered=coverage(sum,combo.length);
+    if(covered>=runLength){
+      const materialNeeded=Math.max(0,runLength-Math.max(0,combo.length-1)*gap);
+      const waste=sum-materialNeeded;
+      const cand={combo:[...combo],sum,waste,pieces:combo.length,materialNeeded};
+      if(!best || cand.waste<best.waste || (Math.abs(cand.waste-best.waste)<.001 && cand.pieces<best.pieces)) best=cand;
       return;
     }
     if(depth>=maxPieces) return;
@@ -699,6 +708,7 @@ function chooseAlignedPattern(runLength, allowedLengths) {
   }
 
   walk([],0,0);
+  if(!best) return null;
 
   const actual=[...best.combo];
   if(best.waste>0) actual[actual.length-1]-=best.waste;
@@ -842,14 +852,15 @@ function buildRowsHalf(runLength,rowCount,allowedLengths){
   const rows=[];
   const allPieceLengths=[];
   const pieceRefs=[];
-
-  const half=runLength/2;
-  const quarter=runLength/4;
+  const gap=CONFIG.boardGap;
 
   for(let r=0;r<rowCount;r++){
+    const pieceCount=r%2===0?2:3;
+    const materialSpan=Math.max(0,runLength-gap*(pieceCount-1));
+
     const lengths = r%2===0
-      ? [half,half]
-      : [quarter,half,quarter];
+      ? [materialSpan/2,materialSpan/2]
+      : [materialSpan/4,materialSpan/2,materialSpan/4];
 
     const row=makeRowFromLengths(lengths);
     rows.push(row);
@@ -888,7 +899,7 @@ function buildRowsHalf(runLength,rowCount,allowedLengths){
     finalWaste:packed.finalWaste,
     offcuts:packed.offcuts,
     bins:packed.bins,
-    warning:"Равномерная шахматка: ряд A = 1/2 + 1/2; ряд B = 1/4 + 1/2 + 1/4. Повторяются только эти две схемы."
+    warning:"Равномерная шахматка: технологический зазор между торцами ДПК 3 мм. Ряд A = 1/2 + 1/2; ряд B = 1/4 + 1/2 + 1/4."
   };
 }
 
@@ -911,12 +922,16 @@ function buildRowsOptimal(runLength,rowCount,allowedLengths){
   const purchases={3000:0,4000:0,6000:0};
   const rows=[];
   let reusedPieces=0;
+  const gap=CONFIG.boardGap;
 
   for(let r=0;r<rowCount;r++){
     let remaining=runLength;
     const pieces=[];
 
     while(remaining>0.5){
+      if(pieces.length) remaining=Math.max(0,remaining-gap);
+      if(remaining<=0.5) break;
+
       let usedFromOffcut=false;
       const idx=takeBestOffcut(offcuts,remaining);
 
@@ -924,7 +939,7 @@ function buildRowsOptimal(runLength,rowCount,allowedLengths){
         const available=offcuts[idx];
         if(available>=remaining || remaining>3000){
           const used=Math.min(available,remaining);
-          pieces.push({length:used,sourceLength:available,reused:true});
+          pieces.push({length:used,cutLength:used,sourceLength:available,stockLength:available,reused:true});
           reusedPieces++;
           if(available>used+0.5) offcuts[idx]=available-used;
           else offcuts.splice(idx,1);
@@ -939,7 +954,7 @@ function buildRowsOptimal(runLength,rowCount,allowedLengths){
       if(!stock) return emptyBoardResult();
       addPurchase(purchases,stock);
       const used=Math.min(stock,remaining);
-      pieces.push({length:used,sourceLength:stock,reused:false});
+      pieces.push({length:used,cutLength:used,sourceLength:stock,stockLength:stock,reused:false});
       remaining-=used;
 
       const leftover=stock-used;
@@ -952,9 +967,10 @@ function buildRowsOptimal(runLength,rowCount,allowedLengths){
     const seams=[];
     for(let i=0;i<pieces.length-1;i++){
       x+=pieces[i].length;
-      seams.push(x);
+      seams.push(x+gap/2);
+      x+=gap;
     }
-    rows.push({pieces,seams});
+    rows.push({pieces,seams,gap});
   }
 
   offcuts.sort((a,b)=>b-a);
@@ -1067,7 +1083,8 @@ function mergePurchases(target,source){
 
 function buildPolygonBoardRows(L,W,direction,boardModule,mode,allowedLengths){
   const across=direction==="l"?W:L;
-  const rowCount=Math.ceil(across/boardModule);
+  const boardPitch=boardModule+CONFIG.boardGap;
+  const rowCount=Math.ceil(across/boardPitch);
   const rows=[];
   const purchases={3000:0,4000:0,6000:0};
   let reusedPieces=0,finalWaste=0;
@@ -1075,7 +1092,7 @@ function buildPolygonBoardRows(L,W,direction,boardModule,mode,allowedLengths){
   let warning="";
 
   for(let r=0;r<rowCount;r++){
-    const axis=Math.min(across-0.001,(r+0.5)*boardModule);
+    const axis=Math.min(across-0.001,r*boardPitch+boardModule/2);
     const spans=polygonScanlineSegments(axis,direction,L,W);
     const row={axis,segments:[],seams:[]};
 
@@ -1172,7 +1189,9 @@ function applyPolygonSeamPatterns(boardRows,patterns,allowedLengths){
       const seams=[];
 
       for(let j=0;j<cuts.length-1;j++){
-        const len=cuts[j+1]-cuts[j];
+        const leftGap=j>0 ? CONFIG.boardGap/2 : 0;
+        const rightGap=j<cuts.length-2 ? CONFIG.boardGap/2 : 0;
+        const len=Math.max(0,cuts[j+1]-cuts[j]-leftGap-rightGap);
         const piece={
           length:len,
           cutLength:len,
@@ -1918,6 +1937,7 @@ function renderBoardRows(parent,model){
         seg.pieces.forEach((piece,index)=>{
           addPiece(piece,rowStart,rowSize,cursor,index===0);
           cursor+=piece.length;
+          if(index<seg.pieces.length-1) cursor+=CONFIG.boardGap;
         });
       });
     });
@@ -1925,13 +1945,16 @@ function renderBoardRows(parent,model){
   }
 
   const rowCount=Math.max(1,boardRows.rows.length);
+  const boardWidth=+$("boardModule")?.value||CONFIG.defaultBoardModule;
+  const pitch=boardWidth+CONFIG.boardGap;
   boardRows.rows.forEach((row,rowIndex)=>{
-    const rowStart=rowIndex/rowCount;
-    const rowSize=1/rowCount;
+    const rowStart=(rowIndex*pitch)/across;
+    const rowSize=Math.min(1,boardWidth/across);
     let cursor=0;
     row.pieces.forEach((piece,index)=>{
       addPiece(piece,rowStart,rowSize,cursor,index===0);
       cursor+=piece.length;
+      if(index<row.pieces.length-1) cursor+=CONFIG.boardGap;
     });
   });
 }
@@ -2414,6 +2437,11 @@ function buildAlgorithmDiagnostics(model){
   }
 
   lines.push({
+    title:"Технологический зазор ДПК",
+    text:"3 мм всегда: между соседними досками по ширине и между торцами досок в местах продольных стыков. Зазор участвует в геометрии раскладки и количестве материала."
+  });
+
+  lines.push({
     title:"ДПК",
     text:"Закупочные длины: "+getAllowedBoardLengths().map(x=>x/1000+" м").join(" / ")+
       ". Фактические детали считаются отдельно от закупочных досок."
@@ -2553,7 +2581,8 @@ function calculate(){
 
   const joistStep=joistStepByBoardHeight(boardHeight);
   const structuralLimits=terraceStructuralLimits(joistStep);
-  const rowCount=Math.ceil(across/boardModule);
+  const boardPitch=boardModule+CONFIG.boardGap;
+  const rowCount=Math.ceil(across/boardPitch);
   let boardRows = shapeMode==="free" && polygonClosed
     ? buildPolygonBoardRows(L,W,direction,boardModule,layoutMode,allowedLengths)
     : buildBoardRows(run,rowCount,layoutMode,allowedLengths);
@@ -2773,7 +2802,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.3"
+    algorithmVersion:"3.4"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
