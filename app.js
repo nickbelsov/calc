@@ -2605,7 +2605,8 @@ function renderAlgorithmDiagnostics(model){
 }
 
 function calculate(){
-  const shapeMode=$("shapeMode").value;
+  const selectedShapeMode=$("shapeMode").value;
+  const shapeMode=selectedShapeMode==="rect" ? "rect" : "free";
   const freeMetrics=shapeMode==="free" ? getPolygonMetrics() : null;
   const L=shapeMode==="free" ? freeMetrics.bboxL : (+$("L").value||6200);
   const W=shapeMode==="free" ? freeMetrics.bboxW : (+$("W").value||3800);
@@ -2844,7 +2845,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.9"
+    algorithmVersion:"4.0"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -2855,6 +2856,47 @@ function calculate(){
   },0);
 }
 
+function applyStandardShapePreset(mode){
+  const L=Math.max(1000,Number($("L")?.value)||6200);
+  const W=Math.max(1000,Number($("W")?.value)||3800);
+  const x1=L*.34,x2=L*.66;
+  const y1=W*.34,y2=W*.66;
+
+  const presets={
+    lshape:[
+      {x:0,y:0},{x:L,y:0},{x:L,y:W},{x:x1,y:W},{x:x1,y:y1},{x:0,y:y1}
+    ],
+    tshape:[
+      {x:0,y:0},{x:L,y:0},{x:L,y:y1},{x:x2,y:y1},{x:x2,y:W},{x:x1,y:W},{x:x1,y:y1},{x:0,y:y1}
+    ],
+    ushape:[
+      {x:0,y:0},{x:x1,y:0},{x:x1,y:y2},{x:x2,y:y2},{x:x2,y:0},{x:L,y:0},{x:L,y:W},{x:0,y:W}
+    ],
+    oshape:[
+      // O-форма требует отверстия; до отдельной поддержки holes используем
+      // внешний контур как редактируемый пресет и сохраняем тип для следующего этапа.
+      {x:0,y:0},{x:L,y:0},{x:L,y:W},{x:0,y:W}
+    ]
+  };
+
+  if(mode==="circle"){
+    const pts=[];
+    const cx=L/2,cy=W/2,rx=L/2,ry=W/2;
+    for(let i=0;i<48;i++){
+      const t=Math.PI*2*i/48;
+      pts.push({x:cx+Math.cos(t)*rx,y:cy+Math.sin(t)*ry});
+    }
+    polygonPoints=pts;
+  }else if(presets[mode]){
+    polygonPoints=presets[mode];
+  }else return;
+
+  polygonClosed=true;
+  drawingPolygon=false;
+  draggingVertex=-1;
+  polygonViewBoxLock=null;
+}
+
 function updateControls(){
   const base=$("base").value;
   const layoutMode=$("layoutMode").value;
@@ -2862,9 +2904,10 @@ function updateControls(){
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
-  const free=$("shapeMode").value==="free";
-  $("rectControls").classList.toggle("hidden",free);
-  $("freeControls").classList.toggle("hidden",!free);
+  const mode=$("shapeMode").value;
+  const free=mode!=="rect";
+  $("rectControls").classList.toggle("hidden",mode==="free");
+  $("freeControls").classList.toggle("hidden",mode!=="free");
   $("polygonEditor").classList.toggle("hidden",!free);
   applyPolygonToTerrace();
   if(free) setTimeout(renderPolygonEditor,0);
@@ -2875,12 +2918,21 @@ function updateControls(){
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","shapeMode","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","boardStockLength","useWarehouse","warehouseProduct"].forEach(id=>{
+["L","W","dir","layoutMode","base","boardModule","boardHeight","hasHouse","houseSide","boardStockLength","useWarehouse","warehouseProduct"].forEach(id=>{
   const el=$(id);
   if(el){
     el.addEventListener("input",()=>{updateControls();calculate();});
     el.addEventListener("change",()=>{updateControls();calculate();});
   }
+});
+
+$("shapeMode")?.addEventListener("change",()=>{
+  const mode=$("shapeMode").value;
+  if(mode!=="rect" && mode!=="free") applyStandardShapePreset(mode);
+  if(mode==="free" && (!polygonClosed || polygonPoints.length<3)) resetPolygon();
+  updateControls();
+  calculate();
+  if(mode!=="rect") setTimeout(fitCanvasView,50);
 });
 
 ["showBoards","showJoists","showBelts","showPiles"].forEach(id=>{
