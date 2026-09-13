@@ -2434,145 +2434,65 @@ function pointInPolygonMm(point){
   return inside;
 }
 
-function buildConcreteStructure(L,W,direction,shapeMode,areaM2,supportKey="rubber"){
+function supportPointsAlongJoists(L,W,direction,shapeMode,joists,maxSpacing){
+  const points=[];
+  const positions=uniquePositions([...(joists?.regular||[]),...(joists?.seam||[])]);
+  const fullLength=direction==="l"?W:L;
+  for(const pos of positions){
+    const spans=(shapeMode==="free"&&polygonClosed)
+      ? polygonCrosslineSegments(pos,direction,L,W)
+      : [{start:0,length:fullLength}];
+    for(const span of spans){
+      const layout=supportLineLayout(span.length,maxSpacing,Math.min(40,maxSpacing/4));
+      for(const d of layout.positions){
+        const along=span.start+d;
+        points.push(direction==="l"?{x:pos,y:along}:{x:along,y:pos});
+      }
+    }
+  }
+  return mergeSupportPoints(points,2);
+}
+
+function buildConcreteStructure(L,W,direction,shapeMode,areaM2,supportKey="rubber",joists=null){
   const tieStepMax=CONFIG.rules.concreteTieStepMaxMm||1500;
-  const supportCount=Math.ceil(areaM2*(CONFIG.rules.concreteSupportsPerM2||5));
   const across=direction==="l"?W:L;
   const tieLayout=equalLayout(across,tieStepMax);
   const tieSegments=[];
-
   for(const pos of tieLayout.positions){
-    if(shapeMode==="free" && polygonClosed){
-      const spans=polygonScanlineSegments(pos,direction,L,W);
-      for(const span of spans){
-        if(direction==="l"){
-          tieSegments.push({orientation:"h",axis:pos,start:span.start,end:span.start+span.length,type:"concrete-tie"});
-        }else{
-          tieSegments.push({orientation:"v",axis:pos,start:span.start,end:span.start+span.length,type:"concrete-tie"});
-        }
-      }
-    }else{
-      if(direction==="l"){
-        tieSegments.push({orientation:"h",axis:pos,start:0,end:L,type:"concrete-tie"});
-      }else{
-        tieSegments.push({orientation:"v",axis:pos,start:0,end:W,type:"concrete-tie"});
-      }
+    const spans=(shapeMode==="free"&&polygonClosed)
+      ? polygonScanlineSegments(pos,direction,L,W)
+      : [{start:0,length:direction==="l"?L:W}];
+    for(const span of spans){
+      tieSegments.push(direction==="l"
+        ? {orientation:"h",axis:pos,start:span.start,end:span.start+span.length,type:"concrete-tie"}
+        : {orientation:"v",axis:pos,start:span.start,end:span.start+span.length,type:"concrete-tie"});
     }
   }
-
   const tieMeters=tieSegments.reduce((sum,seg)=>sum+(seg.end-seg.start)/1000,0);
-
-  // Равномерно распределяем расчётное количество опор по площади.
-  const supportPoints=[];
-  if(supportCount>0){
-    const b=shapeMode==="free"&&polygonClosed ? polygonBounds(polygonPoints) : {minX:0,minY:0,maxX:L,maxY:W};
-    let density=1;
-    while(supportPoints.length<supportCount && density<12){
-      supportPoints.length=0;
-      const aspect=Math.max(.1,L/Math.max(1,W));
-      const nx=Math.max(1,Math.ceil(Math.sqrt(supportCount*aspect)*density));
-      const ny=Math.max(1,Math.ceil(supportCount* density / nx));
-      for(let iy=0;iy<ny && supportPoints.length<supportCount;iy++){
-        for(let ix=0;ix<nx && supportPoints.length<supportCount;ix++){
-          const x=(ix+.5)/nx*L;
-          const y=(iy+.5)/ny*W;
-          if(shapeMode==="free"&&polygonClosed){
-            const abs={x:b.minX+x,y:b.minY+y};
-            if(!pointInPolygonMm(abs)) continue;
-          }
-          supportPoints.push({x,y});
-        }
-      }
-      density+=.35;
-    }
-  }
-
+  const maxSpacing=CONFIG.rules.concreteSupportMaxSpacingMm||500;
+  const supportPoints=supportPointsAlongJoists(L,W,direction,shapeMode,joists,maxSpacing);
+  const supportCount=supportPoints.length;
   const specs=CONFIG.concreteSupportSpecs||{};
-  let materialSpec="";
-  let materialQuantity="";
+  let materialSpec,materialQuantity;
   if(supportKey==="rebar"){
-    const d=specs.rebar?.diameterMm||10;
-    const hh=specs.rebar?.heightMm||100;
+    const d=specs.rebar?.diameterMm||10, hh=specs.rebar?.heightMm||100;
     materialSpec="Арматурный штырь Ø"+d+"×"+hh+" мм";
     materialQuantity=supportCount+" шт. · "+fmt(supportCount*hh/1000,1)+" м арматуры Ø"+d+" мм";
-  }else if(supportKey==="rubber"){
+  }else{
     const r=specs.rubber||{widthMm:100,depthMm:100,thicknessMm:5};
     materialSpec="Резиновая подкладка "+r.widthMm+"×"+r.depthMm+"×"+r.thicknessMm+" мм";
     materialQuantity=supportCount+" шт.";
-  }else{
-    materialSpec="Регулируемая винтовая пластиковая опора";
-    materialQuantity=supportCount+" шт.";
   }
-
-  return {
-    supportKey,
-    materialSpec,
-    materialQuantity,
-    supportCount,
-    supportPoints,
-    supportsPerM2:CONFIG.rules.concreteSupportsPerM2||5,
-    tieStep:tieLayout.step,
-    tiePositions:tieLayout.positions,
-    tieSegments,
-    tieMeters
-  };
+  return {supportKey,materialSpec,materialQuantity,supportCount,supportPoints,maxSupportSpacing:maxSpacing,
+    tieStep:tieLayout.step,tiePositions:tieLayout.positions,tieSegments,tieMeters};
 }
 
 function buildRoofStructure(L,W,direction,shapeMode,areaM2,joists){
-  const supportCount=Math.ceil(areaM2*(CONFIG.rules.roofSupportsPerM2||5));
-  const joistPositions=uniquePositions([...(joists?.regular||[]),...(joists?.seam||[])]);
-  const candidates=[];
-
-  const addCandidatesForSegment=(pos,start,length)=>{
-    if(length<=0) return;
-    // Плотная сетка кандидатов вдоль каждой лаги, затем берём
-    // равномерную выборку нужного количества 5 шт./м².
-    const candidateStep=350;
-    const count=Math.max(2,Math.ceil(length/candidateStep)+1);
-    for(let i=0;i<count;i++){
-      const t=count===1?0.5:i/(count-1);
-      const along=start+t*length;
-      if(direction==="l"){
-        candidates.push({x:pos,y:along});
-      }else{
-        candidates.push({x:along,y:pos});
-      }
-    }
-  };
-
-  for(const pos of joistPositions){
-    if(shapeMode==="free" && polygonClosed){
-      const spans=polygonScanlineSegments(pos,direction,L,W);
-      for(const span of spans) addCandidatesForSegment(pos,span.start,span.length);
-    }else{
-      addCandidatesForSegment(pos,0,direction==="l"?W:L);
-    }
-  }
-
-  // Удаляем близкие дубли (в первую очередь на сдвоенных лагах).
-  const unique=[];
-  for(const p of candidates){
-    if(!unique.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<40)) unique.push(p);
-  }
-
-  const supportPoints=[];
-  if(unique.length && supportCount>0){
-    const target=Math.min(supportCount,unique.length);
-    for(let i=0;i<target;i++){
-      const index=target===1?0:Math.round(i*(unique.length-1)/(target-1));
-      supportPoints.push(unique[index]);
-    }
-  }
-
-  return {
-    supportCount,
-    actualSupportCount:supportPoints.length,
-    supportsPerM2:CONFIG.rules.roofSupportsPerM2||5,
-    supportPoints,
-    materialSpec:"Регулируемая винтовая пластиковая опора",
-    materialQuantity:supportPoints.length+" шт.",
-    placedUnderJoists:true
-  };
+  const maxSpacing=CONFIG.rules.roofSupportMaxSpacingMm||750;
+  const supportPoints=supportPointsAlongJoists(L,W,direction,shapeMode,joists,maxSpacing);
+  return {supportCount:supportPoints.length,actualSupportCount:supportPoints.length,maxSupportSpacing:maxSpacing,
+    supportPoints,materialSpec:"Регулируемая винтовая пластиковая опора",
+    materialQuantity:supportPoints.length+" шт.",placedUnderJoists:true};
 }
 
 function renderPlan(model){
@@ -2787,7 +2707,7 @@ function buildAlgorithmDiagnostics(model){
 
   lines.push({
     title:"Свес ДПК на лаге",
-    text:"Не более 100 мм от оси опорной трубы 40×40×2 до торца доски. На стыке каждый торец опирается на свою лагу."
+    text:"Не более 40 мм от крайней опорной лаги 40×40×2 до свободного торца доски. На стыке каждый торец опирается на свою лагу."
   });
 
   lines.push({
@@ -2900,8 +2820,7 @@ function buildAlgorithmDiagnostics(model){
   if(model.base==="concrete" && model.concreteStructure){
     lines.push({
       title:"Бетонное основание",
-      text:model.concreteStructure.materialSpec+": "+model.concreteStructure.materialQuantity+" по нормативу "+
-        model.concreteStructure.supportsPerM2+" шт./м². Пояс 80×80×2 отсутствует. "+
+      text:model.concreteStructure.materialSpec+": "+model.concreteStructure.materialQuantity+"; точки опирания рассчитаны по фактическим лагам 40×40×2 с шагом вдоль лаги не более "+fmt(model.concreteStructure.maxSupportSpacing)+" мм. Пояс 80×80×2 отсутствует. "+
         "Перемычки 40×40×2: "+fmt(model.concreteStructure.tieMeters,1)+" м.п., шаг "+
         fmt(model.concreteStructure.tieStep)+" мм."
     });
@@ -2909,8 +2828,7 @@ function buildAlgorithmDiagnostics(model){
   if(model.base==="roof" && model.roofStructure){
     lines.push({
       title:"Опоры на кровле",
-      text:model.roofStructure.materialSpec+": "+model.roofStructure.actualSupportCount+" шт. по нормативу "+
-        model.roofStructure.supportsPerM2+" шт./м². Все опоры привязаны к осям лаг 40×40×2."
+      text:model.roofStructure.materialSpec+": "+model.roofStructure.actualSupportCount+" шт.; шаг вдоль лаги не более "+fmt(model.roofStructure.maxSupportSpacing)+" мм. Все опоры привязаны к осям лаг 40×40×2."
     });
   }
 
@@ -3063,7 +2981,7 @@ function calculate(){
 
   const shapeMetrics = shapeMode==="free" ? freeMetrics : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
   const concreteStructure=base==="concrete"
-    ? buildConcreteStructure(L,W,direction,shapeMode,shapeMetrics.areaM2,concreteSupportKey)
+    ? buildConcreteStructure(L,W,direction,shapeMode,shapeMetrics.areaM2,concreteSupportKey,joists)
     : null;
   const roofStructure=base==="roof"
     ? buildRoofStructure(L,W,direction,shapeMode,shapeMetrics.areaM2,joists)
@@ -3179,7 +3097,7 @@ function calculate(){
     $("concreteMaterialSpec").textContent=roofStructure.materialSpec+" — "+roofStructure.materialQuantity;
     $("pileInfo").textContent=
       "Кровля / гидроизоляция: только регулируемые винтовые пластиковые опоры. "+
-      "Норматив "+roofStructure.supportsPerM2+" шт./м². Каждая опора располагается строго под лагой 40×40×2; "+
+      "Опоры рассчитываются по фактическим лагам с шагом вдоль лаги не более "+fmt(roofStructure.maxSupportSpacing)+" мм. Каждая опора располагается строго под лагой 40×40×2; "+
       "верхняя площадка опоры непосредственно несёт лагу. Сваи и арматурные штыри не применяются.";
 
     $("beltRows").textContent="не применяется";
@@ -3195,7 +3113,7 @@ function calculate(){
     $("concreteMaterialRow")?.classList.remove("hidden");
     $("concreteMaterialSpec").textContent=concreteStructure.materialSpec+" — "+concreteStructure.materialQuantity;
     $("pileInfo").textContent=
-      concreteStructure.materialSpec+": норматив "+concreteStructure.supportsPerM2+" шт./м². "+
+      concreteStructure.materialSpec+": "+concreteStructure.supportCount+" шт. по фактическим точкам опирания лаг, шаг вдоль лаги ≤"+fmt(concreteStructure.maxSupportSpacing)+" мм. "+
       "Опорный пояс 80×80×2 не применяется. Лаги 40×40×2 свариваются перемычками 40×40×2 "+
       "в единую сетку с шагом не более "+fmt(concreteStructure.tieStep)+" мм.";
 
@@ -3215,7 +3133,7 @@ function calculate(){
         : "ДПК → профиль 40×40×2 → пояс 80×80×2 → сваи 2500 мм. Металл закупается хлыстами по 6 м.")
     : base==="roof"
       ? "Кровля / гидроизоляция: регулируемые винтовые пластиковые опоры стоят строго под лагами 40×40×2 → металлический каркас → ДПК."
-      : "Бетон: ДПК → лаги 40×40×2 + сварные перемычки 40×40×2 с шагом ≤1500 мм → "+concreteSupportType+" из норматива 5 шт./м². Пояс 80×80×2 не применяется.";
+      : "Бетон: ДПК → лаги 40×40×2 + сварные перемычки 40×40×2 с шагом ≤1500 мм → "+concreteSupportType+" в фактических точках опирания лаг. Пояс 80×80×2 не применяется.";
 
   updateViewSize(L,W);
 
@@ -3225,7 +3143,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
-    algorithmVersion:"5.0"
+    algorithmVersion:"5.1"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3310,9 +3228,9 @@ function updateControls(){
   if(meta){
     const specs=CONFIG.concreteSupportSpecs||{};
     meta.innerHTML=concreteKey==="rebar"
-      ? "<span>Ø"+(specs.rebar?.diameterMm||10)+" мм</span><span>Высота "+(specs.rebar?.heightMm||100)+" мм</span><span>5 шт./м²</span>"
+      ? "<span>Ø"+(specs.rebar?.diameterMm||10)+" мм</span><span>Высота "+(specs.rebar?.heightMm||100)+" мм</span><span>по точкам опирания лаг</span>"
       : concreteKey==="rubber"
-        ? "<span>"+(specs.rubber?.widthMm||100)+"×"+(specs.rubber?.depthMm||100)+"×"+(specs.rubber?.thicknessMm||5)+" мм</span><span>5 шт./м²</span>"
+        ? "<span>"+(specs.rubber?.widthMm||100)+"×"+(specs.rubber?.depthMm||100)+"×"+(specs.rubber?.thicknessMm||5)+" мм</span><span>по точкам опирания лаг</span>"
         : "<span>Винтовая регулируемая</span><span>5 шт./м²</span>";
   }
   document.querySelector(".beltLayer")?.classList.toggle("hidden",base==="concrete");
