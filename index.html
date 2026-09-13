@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Nimtech — калькулятор террасы</title>
-  <link rel="stylesheet" href="style.css?v=20260913-1548">
+  <link rel="stylesheet" href="style.css?v=20260913-1610">
   <script type="importmap">
   {
     "imports": {
@@ -304,6 +304,14 @@
   <div id="pileInfo" class="info"></div>
   <div id="tech"></div>
 
+  <h3>Стоимость материалов</h3>
+  <p>ДПК <b id="priceBoards">—</b></p>
+  <p>Профиль 40×40×2 <b id="priceJoists">—</b></p>
+  <p>Профиль 80×80×2 <b id="priceBelts">—</b></p>
+  <p>Сваи 2500 мм + оголовок <b id="pricePiles">—</b></p>
+  <p class="priceTotalRow">Итого по учтённым материалам <b id="priceTotal">—</b></p>
+  <div id="priceNote" class="info"></div>
+
   <h3>Диагностика алгоритма</h3>
   <div id="algorithmDiagnostics" class="algorithmDiagnostics"></div>
     </div>
@@ -311,9 +319,9 @@
 </aside>
 </main>
 
-<script src="config.js?v=20260913-1405"></script>
+<script src="config.js?v=20260913-1610"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1548"></script>
+<script src="app.js?v=20260913-1610"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
