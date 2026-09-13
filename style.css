@@ -1023,3 +1023,22 @@ body.rightCollapsed .result{
   opacity:.72;
 }
 /* 3 mm gaps are represented geometrically by spacing between boardPiece elements. */
+
+/* =========================================================
+   DPK board visual — physical plank, not centerline diagram
+   Each cut piece is a translucent brown rectangle with its
+   own darker perimeter. The 3 mm joint is the real empty gap.
+   ========================================================= */
+.boardPiece{
+  box-sizing:border-box!important;
+  background:rgba(139,93,65,.20)!important;
+  border:calc(.9px * var(--cad-inv-scale)) solid rgba(125,79,53,.72)!important;
+  opacity:1!important;
+  box-shadow:none!important;
+}
+.boardPiece::after{
+  display:none!important;
+}
+.boardJoint{
+  display:none!important;
+}
