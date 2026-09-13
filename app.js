@@ -2329,7 +2329,7 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHous
   const mergedBelts=mergeCollinearSegments(beltSegments);
   const pileSteps=[];
 
-  $("concreteMaterialRow")?.classList.toggle("hidden",base!=="concrete");
+  $("concreteMaterialRow")?.classList.toggle("hidden",base!=="concrete"&&base!=="roof");
 
   if(base==="ground"){
     for(const seg of mergedBelts){
@@ -2518,6 +2518,63 @@ function buildConcreteStructure(L,W,direction,shapeMode,areaM2,supportKey="rubbe
   };
 }
 
+function buildRoofStructure(L,W,direction,shapeMode,areaM2,joists){
+  const supportCount=Math.ceil(areaM2*(CONFIG.rules.roofSupportsPerM2||5));
+  const joistPositions=uniquePositions([...(joists?.regular||[]),...(joists?.seam||[])]);
+  const candidates=[];
+
+  const addCandidatesForSegment=(pos,start,length)=>{
+    if(length<=0) return;
+    // Плотная сетка кандидатов вдоль каждой лаги, затем берём
+    // равномерную выборку нужного количества 5 шт./м².
+    const candidateStep=350;
+    const count=Math.max(2,Math.ceil(length/candidateStep)+1);
+    for(let i=0;i<count;i++){
+      const t=count===1?0.5:i/(count-1);
+      const along=start+t*length;
+      if(direction==="l"){
+        candidates.push({x:pos,y:along});
+      }else{
+        candidates.push({x:along,y:pos});
+      }
+    }
+  };
+
+  for(const pos of joistPositions){
+    if(shapeMode==="free" && polygonClosed){
+      const spans=polygonScanlineSegments(pos,direction,L,W);
+      for(const span of spans) addCandidatesForSegment(pos,span.start,span.length);
+    }else{
+      addCandidatesForSegment(pos,0,direction==="l"?W:L);
+    }
+  }
+
+  // Удаляем близкие дубли (в первую очередь на сдвоенных лагах).
+  const unique=[];
+  for(const p of candidates){
+    if(!unique.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<40)) unique.push(p);
+  }
+
+  const supportPoints=[];
+  if(unique.length && supportCount>0){
+    const target=Math.min(supportCount,unique.length);
+    for(let i=0;i<target;i++){
+      const index=target===1?0:Math.round(i*(unique.length-1)/(target-1));
+      supportPoints.push(unique[index]);
+    }
+  }
+
+  return {
+    supportCount,
+    actualSupportCount:supportPoints.length,
+    supportsPerM2:CONFIG.rules.roofSupportsPerM2||5,
+    supportPoints,
+    materialSpec:"Регулируемая винтовая пластиковая опора",
+    materialQuantity:supportPoints.length+" шт.",
+    placedUnderJoists:true
+  };
+}
+
 function renderPlan(model){
   const terrace=$("terrace");
   const layer=$("constructionLayer");
@@ -2620,6 +2677,18 @@ function renderPlan(model){
       dot.style.left=(p.x/modelL*w)+"px";
       dot.style.top=(p.y/modelW*h)+"px";
       dot.title=model.concreteStructure.materialSpec||"Опора";
+      layer.appendChild(dot);
+    }
+  }
+
+  if($("showPiles").checked && base==="roof" && model.roofStructure){
+    const w=layer.clientWidth,h=layer.clientHeight;
+    for(const p of model.roofStructure.supportPoints){
+      const dot=document.createElement("div");
+      dot.className="concreteSupportDot support-plastic roofSupportDot";
+      dot.style.left=(p.x/modelL*w)+"px";
+      dot.style.top=(p.y/modelW*h)+"px";
+      dot.title="Регулируемая винтовая пластиковая опора под лагой 40×40×2";
       layer.appendChild(dot);
     }
   }
@@ -2837,6 +2906,13 @@ function buildAlgorithmDiagnostics(model){
         fmt(model.concreteStructure.tieStep)+" мм."
     });
   }
+  if(model.base==="roof" && model.roofStructure){
+    lines.push({
+      title:"Опоры на кровле",
+      text:model.roofStructure.materialSpec+": "+model.roofStructure.actualSupportCount+" шт. по нормативу "+
+        model.roofStructure.supportsPerM2+" шт./м². Все опоры привязаны к осям лаг 40×40×2."
+    });
+  }
 
   const joistBuy=stockPurchase(model.totalJoistMeters||0);
   const beltBuy=stockPurchase(model.beltMeters||0);
@@ -2989,6 +3065,9 @@ function calculate(){
   const concreteStructure=base==="concrete"
     ? buildConcreteStructure(L,W,direction,shapeMode,shapeMetrics.areaM2,concreteSupportKey)
     : null;
+  const roofStructure=base==="roof"
+    ? buildRoofStructure(L,W,direction,shapeMode,shapeMetrics.areaM2,joists)
+    : null;
 
   if(concreteStructure){
     // На бетоне 80×80 не применяется. Перемычки 40×40 входят в общий метраж 40×40.
@@ -3093,10 +3172,21 @@ function calculate(){
     }
   }else if(base==="roof"){
     $("pilesPerBelt").textContent="—";
-    $("pileStepOut").textContent="—";
+    $("pileStepOut").textContent="под лагами 40×40×2";
     $("checkPileStep").textContent="—";
-    $("supports").textContent="Регулируемые пластиковые опоры";
-    $("pileInfo").textContent="Для кровли сваи не применяются.";
+    $("supports").textContent=roofStructure.actualSupportCount+" шт. · регулируемые винтовые пластиковые опоры";
+    $("concreteMaterialRow")?.classList.remove("hidden");
+    $("concreteMaterialSpec").textContent=roofStructure.materialSpec+" — "+roofStructure.materialQuantity;
+    $("pileInfo").textContent=
+      "Кровля / гидроизоляция: только регулируемые винтовые пластиковые опоры. "+
+      "Норматив "+roofStructure.supportsPerM2+" шт./м². Каждая опора располагается строго под лагой 40×40×2; "+
+      "верхняя площадка опоры непосредственно несёт лагу. Сваи и арматурные штыри не применяются.";
+
+    $("beltRows").textContent="не применяется";
+    $("beltStepOut").textContent="—";
+    $("checkBeltStep").textContent="—";
+    $("belt").textContent="0 м.п.";
+    $("beltPurchase").textContent="0 хлыстов / 0 м";
   }else{
     $("pilesPerBelt").textContent="—";
     $("pileStepOut").textContent="—";
@@ -3124,7 +3214,7 @@ function calculate(){
         ? "ДПК → профиль 40×40×2 → пояс 80×80×2 → зональные сваи: 2500 мм основная площадка / 2000 мм крыльцо. Металл закупается хлыстами по 6 м."
         : "ДПК → профиль 40×40×2 → пояс 80×80×2 → сваи 2500 мм. Металл закупается хлыстами по 6 м.")
     : base==="roof"
-      ? "Кровля / гидроизоляция: только регулируемые пластиковые опоры → металлический каркас → ДПК."
+      ? "Кровля / гидроизоляция: регулируемые винтовые пластиковые опоры стоят строго под лагами 40×40×2 → металлический каркас → ДПК."
       : "Бетон: ДПК → лаги 40×40×2 + сварные перемычки 40×40×2 с шагом ≤1500 мм → "+concreteSupportType+" из норматива 5 шт./м². Пояс 80×80×2 не применяется.";
 
   updateViewSize(L,W);
@@ -3134,8 +3224,8 @@ function calculate(){
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
-    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,
-    algorithmVersion:"4.9"
+    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
+    algorithmVersion:"5.0"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3214,6 +3304,7 @@ function updateControls(){
 
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
+  $("roof")?.classList.toggle("hidden",base!=="roof");
   const concreteKey=$("concreteSupport")?.value||"rubber";
   const meta=$("concreteSupportMeta");
   if(meta){
@@ -3226,7 +3317,7 @@ function updateControls(){
   }
   document.querySelector(".beltLayer")?.classList.toggle("hidden",base==="concrete");
   const supportChip=document.querySelector(".pileLayer span:last-child");
-  if(supportChip) supportChip.textContent=base==="concrete"?"Опоры":"Сваи";
+  if(supportChip) supportChip.textContent=(base==="concrete"||base==="roof")?"Опоры":"Сваи";
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
   updateHouseSideOptions();
   const mode=$("shapeMode").value;
