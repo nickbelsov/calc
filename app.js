@@ -1929,8 +1929,9 @@ function renderBoardRows(parent,model){
 
   if(boardRows.polygon){
     boardRows.rows.forEach(row=>{
-      const rowStart=Math.max(0,(row.axis-CONFIG.defaultBoardModule/2)/across);
-      const rowSize=Math.min(1,CONFIG.defaultBoardModule/across);
+      const boardWidth=+$("boardModule")?.value||CONFIG.defaultBoardModule;
+      const rowStart=Math.max(0,(row.axis-boardWidth/2)/across);
+      const rowSize=Math.min(1,boardWidth/across);
 
       row.segments.forEach(seg=>{
         let cursor=seg.start;
