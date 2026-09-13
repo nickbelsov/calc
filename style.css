@@ -1042,3 +1042,20 @@ body.rightCollapsed .result{
 .boardJoint{
   display:none!important;
 }
+
+.boardStockLengthSelect{
+  width:100%;
+  min-height:52px;
+  border:1px solid #d9ddde;
+  border-radius:14px;
+  background:#fff;
+  padding:0 16px;
+  font-size:14px;
+  font-weight:600;
+  color:#202426;
+  outline:none;
+}
+.boardStockLengthSelect:focus{
+  border-color:#b8bec1;
+  box-shadow:0 0 0 3px rgba(24,28,30,.04);
+}
