@@ -1559,41 +1559,125 @@ function addArbitrarySegment(parent,seg,L,W,cls){
   parent.appendChild(el);
 }
 
+function trimInterval(interval,cuts,tol=1){
+  let parts=[{start:interval.start,end:interval.end}];
+  for(const cut of cuts){
+    const next=[];
+    for(const p of parts){
+      if(cut.end<=p.start+tol || cut.start>=p.end-tol){
+        next.push(p);
+        continue;
+      }
+      if(cut.start>p.start+tol) next.push({start:p.start,end:Math.min(cut.start,p.end)});
+      if(cut.end<p.end-tol) next.push({start:Math.max(cut.end,p.start),end:p.end});
+    }
+    parts=next;
+  }
+  return parts.filter(p=>p.end-p.start>tol);
+}
+
+function redundantIntervalFromAngledSupport(beltAxis,segStart,segEnd,direction,angled,maxLagOverhang){
+  const cuts=[];
+
+  for(const s of angled||[]){
+    if(direction==="l"){
+      // Внутренний пояс горизонтальный, лаги вертикальные.
+      const x1=s.x1,x2=s.x2,y1=s.y1,y2=s.y2;
+      const lo=Math.max(segStart,Math.min(x1,x2));
+      const hi=Math.min(segEnd,Math.max(x1,x2));
+      if(hi-lo<=1 || Math.abs(x2-x1)<1e-6) continue;
+
+      const yAt=x=>y1+(y2-y1)*((x-x1)/(x2-x1));
+      // |beltAxis - y(x)| <= maxLagOverhang.
+      const samples=[lo,hi];
+      const slope=(y2-y1)/(x2-x1);
+      if(Math.abs(slope)>1e-9){
+        samples.push(x1+(beltAxis-maxLagOverhang-y1)/slope);
+        samples.push(x1+(beltAxis+maxLagOverhang-y1)/slope);
+      }
+      const xs=samples.filter(x=>x>=lo-1&&x<=hi+1).sort((m,n)=>m-n);
+      for(let i=0;i<xs.length-1;i++){
+        const mid=(xs[i]+xs[i+1])/2;
+        if(Math.abs(beltAxis-yAt(mid))<=maxLagOverhang+1){
+          cuts.push({start:Math.max(lo,xs[i]),end:Math.min(hi,xs[i+1])});
+        }
+      }
+    }else{
+      // Внутренний пояс вертикальный, лаги горизонтальные.
+      const y1=s.y1,y2=s.y2,x1=s.x1,x2=s.x2;
+      const lo=Math.max(segStart,Math.min(y1,y2));
+      const hi=Math.min(segEnd,Math.max(y1,y2));
+      if(hi-lo<=1 || Math.abs(y2-y1)<1e-6) continue;
+
+      const xAt=y=>x1+(x2-x1)*((y-y1)/(y2-y1));
+      const samples=[lo,hi];
+      const slope=(x2-x1)/(y2-y1);
+      if(Math.abs(slope)>1e-9){
+        samples.push(y1+(beltAxis-maxLagOverhang-x1)/slope);
+        samples.push(y1+(beltAxis+maxLagOverhang-x1)/slope);
+      }
+      const ys=samples.filter(y=>y>=lo-1&&y<=hi+1).sort((m,n)=>m-n);
+      for(let i=0;i<ys.length-1;i++){
+        const mid=(ys[i]+ys[i+1])/2;
+        if(Math.abs(beltAxis-xAt(mid))<=maxLagOverhang+1){
+          cuts.push({start:Math.max(lo,ys[i]),end:Math.min(hi,ys[i+1])});
+        }
+      }
+    }
+  }
+
+  return cuts;
+}
+
+function pruneInternalBeltsNearAngledSupports(belts,direction,angled,maxLagOverhang){
+  for(const belt of belts){
+    const nextSegments=[];
+    for(const seg of belt.segments){
+      const segStart=seg.start;
+      const segEnd=seg.start+seg.length;
+      const cuts=redundantIntervalFromAngledSupport(
+        belt.axis,segStart,segEnd,direction,angled,maxLagOverhang
+      );
+      const parts=trimInterval({start:segStart,end:segEnd},cuts,2);
+
+      for(const p of parts){
+        nextSegments.push({
+          start:p.start,
+          length:p.end-p.start,
+          piles:[],
+          pileStep:0,
+          houseOffsetApplied:false
+        });
+      }
+    }
+    belt.segments=nextSegments;
+  }
+  return belts;
+}
+
 function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSide,structuralLimits=null){
   const limits=structuralLimits||terraceStructuralLimits(CONFIG.joist.stepByBoardHeight.thinStep);
   const belts=[];
-  let beltMeters=0;
   const pileSteps=[];
 
-  // 1) Внутренние прямые несущие линии 80×80×2.
+  // 1) Сначала получаем геометрию внутренних прямых поясов.
   for(const beltPos of beltPositions){
     const across=direction==="l"?W:L;
     const scanPos=Math.min(across-0.001,Math.max(0.001,beltPos));
     const spans=polygonScanlineSegments(scanPos,direction,L,W);
-    const segments=[];
-
-    for(const span of spans){
-      const layout=endpointPileLayout(span.length,limits.pileSpacingMax);
-      const piles=layout.positions.map(p=>span.start+p);
-
-      segments.push({
+    belts.push({
+      axis:beltPos,
+      segments:spans.map(span=>({
         start:span.start,
         length:span.length,
-        piles,
-        pileStep:layout.step,
+        piles:[],
+        pileStep:0,
         houseOffsetApplied:false
-      });
-
-      beltMeters+=span.length/1000;
-      if(layout.step) pileSteps.push(layout.step);
-    }
-
-    belts.push({axis:beltPos,segments});
+      }))
+    });
   }
 
-  // 2) Для каждой свободной наклонной стороны строим ОТДЕЛЬНЫЙ
-  // внутренний пояс 80×80×2, параллельный стороне.
-  // Его положение определяется правилом: свес конца лаги <= 200 мм.
+  // 2) Отдельные пояса вдоль свободных наклонных сторон.
   const angledSupportSegments=angledInsetSupportSegments(
     direction,
     hasHouse,
@@ -1601,18 +1685,29 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     CONFIG.joist.maxEdgeCantilever
   );
 
-  beltMeters+=angledSupportSegments.reduce((sum,s)=>sum+s.length/1000,0);
-
-  const angledPilePoints=perimeterPilePoints(
+  // 3) Убираем дублирование: если наклонный крайний пояс уже
+  // поддерживает лаги со свесом <=200 мм, кусок внутреннего 80×80
+  // в этой зоне не нужен.
+  pruneInternalBeltsNearAngledSupports(
+    belts,
+    direction,
     angledSupportSegments,
-    limits.pileSpacingMax,
-    CONFIG.ground.pileLength
+    CONFIG.joist.maxEdgeCantilever
   );
 
-  // 3) Сваи внутренних прямых поясов.
+  // 4) После обрезки заново считаем сваи и метраж внутренних поясов.
+  let beltMeters=0;
   const internalPilePoints=[];
+
   for(const belt of belts){
     for(const seg of belt.segments){
+      const layout=endpointPileLayout(seg.length,limits.pileSpacingMax);
+      seg.piles=layout.positions.map(p=>seg.start+p);
+      seg.pileStep=layout.step;
+
+      beltMeters+=seg.length/1000;
+      if(layout.step) pileSteps.push(layout.step);
+
       for(const p of seg.piles){
         if(direction==="l"){
           internalPilePoints.push({
@@ -1633,6 +1728,15 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
     }
   }
 
+  // 5) Наклонные пояса тоже участвуют в метраже и сваях.
+  beltMeters+=angledSupportSegments.reduce((sum,s)=>sum+s.length/1000,0);
+
+  const angledPilePoints=perimeterPilePoints(
+    angledSupportSegments,
+    limits.pileSpacingMax,
+    CONFIG.ground.pileLength
+  );
+
   const pilePoints=mergeSupportPoints(
     [...angledPilePoints,...internalPilePoints],
     2
@@ -1641,7 +1745,6 @@ function buildPolygonBeltsAndPiles(L,W,direction,beltPositions,hasHouse,houseSid
   return {
     belts,
     angledSupportSegments,
-    // Контур оставляем только как геометрию площадки, не как несущий пояс.
     perimeterSegments:[],
     pilePoints,
     beltMeters,
@@ -2606,7 +2709,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.0"
+    algorithmVersion:"3.1"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
