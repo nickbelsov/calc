@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Nimtech — калькулятор террасы</title>
-  <link rel="stylesheet" href="style.css?v=20260913-1300">
+  <link rel="stylesheet" href="style.css?v=20260913-1315">
   <script type="importmap">
   {
     "imports": {
@@ -92,10 +92,11 @@
         <div id="concrete" class="hidden">
           <label>Тип опоры</label>
           <select id="concreteSupport">
-            <option>Резиновые подкладки</option>
-            <option>Арматурные штыри</option>
-            <option>Регулируемые пластиковые опоры</option>
+            <option value="rubber">Резиновые подкладки</option>
+            <option value="rebar">Арматурные штыри</option>
+            <option value="plastic">Регулируемые винтовые пластиковые опоры</option>
           </select>
+          <div id="concreteSupportMeta" class="constructionFacts"></div>
         </div>
 
         <label class="checkrow"><input id="hasHouse" type="checkbox"> Примыкание к дому</label>
@@ -272,7 +273,8 @@
   <h3>Опоры / сваи</h3>
   <p>Свай на один пояс <b id="pilesPerBelt">—</b></p>
   <p>Шаг / схема свай <b id="pileStepOut">—</b></p>
-  <p>Всего свай <b id="supports">—</b></p>
+  <p>Всего свай / опор <b id="supports">—</b></p>
+  <p id="concreteMaterialRow" class="hidden">Материал опор <b id="concreteMaterialSpec">—</b></p>
 
   <div id="pileInfo" class="info"></div>
   <div id="tech"></div>
@@ -284,9 +286,9 @@
 </aside>
 </main>
 
-<script src="config.js?v=20260913-1300"></script>
+<script src="config.js?v=20260913-1315"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1300"></script>
+<script src="app.js?v=20260913-1315"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
