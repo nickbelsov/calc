@@ -3193,7 +3193,7 @@ function calculate(){
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
     pricing:{boardCost:boardCostKnown?boardCost:null,joistCost,beltCost,pileCost,total:knownSubtotal},
-    algorithmVersion:"5.4"
+    algorithmVersion:"5.5"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3491,8 +3491,18 @@ async function pdfCapturePlan(kind){
     if(lastModel.shapeMode==="free") renderPolygonEditor();
     await pdfWait(30);
     fitCanvasView();
-    await pdfWait(150);
-    var canvas=await html2canvas(viewport,{backgroundColor:"#ffffff",scale:2,useCORS:true,logging:false});
+    // В PDF оставляем дополнительное поле вокруг контура,
+    // чтобы подписи A–B / B–C и габаритные размеры не обрезались.
+    setCanvasZoom(viewScale*0.80);
+    await pdfWait(180);
+    var canvas=await html2canvas(viewport,{
+      backgroundColor:"#ffffff",
+      scale:2,
+      useCORS:true,
+      logging:false,
+      scrollX:0,
+      scrollY:0
+    });
     return canvas.toDataURL("image/png");
   }finally{
     ids.forEach(function(id){ $(id).checked=saved[id]; });
@@ -3514,6 +3524,17 @@ function pdfLoadImage(src){
   });
 }
 
+
+async function pdfCapture3D(){
+  if(typeof window.captureNimtech3D!=="function") return null;
+  try{
+    return await window.captureNimtech3D();
+  }catch(err){
+    console.warn("Не удалось получить 3D-превью для PDF",err);
+    return null;
+  }
+}
+
 async function pdfPageBase(title,subtitle){
   var canvas=document.createElement("canvas");
   canvas.width=1684; canvas.height=1190;
@@ -3532,6 +3553,80 @@ async function pdfPageBase(title,subtitle){
   ctx.fillStyle="#111416"; ctx.font="700 36px Arial"; ctx.fillText(title,72,202);
   ctx.fillStyle="#7b8387"; ctx.font="17px Arial"; ctx.fillText(subtitle,72,232);
   return {canvas:canvas,ctx:ctx};
+}
+
+
+async function pdfDeckPage(deckImage,threeDImage){
+  var page=await pdfPageBase(
+    "План раскладки ДПК",
+    "Раскладка террасной доски с габаритными размерами площадки и 3D-превью проекта."
+  );
+  var ctx=page.ctx;
+  var deck=await pdfLoadImage(deckImage);
+
+  var leftX=72,leftY=270,leftW=1010,leftH=760;
+  ctx.strokeStyle="#dde1e3";
+  ctx.lineWidth=1;
+  ctx.strokeRect(leftX,leftY,leftW,leftH);
+
+  var ds=Math.min((leftW-28)/deck.width,(leftH-28)/deck.height);
+  var ddw=deck.width*ds, ddh=deck.height*ds;
+  ctx.drawImage(deck,leftX+(leftW-ddw)/2,leftY+(leftH-ddh)/2,ddw,ddh);
+
+  var rightX=1110,rightY=270,rightW=502,rightH=430;
+  ctx.fillStyle="#f6f7f7";
+  ctx.fillRect(rightX,rightY,rightW,rightH);
+  ctx.strokeStyle="#dde1e3";
+  ctx.strokeRect(rightX,rightY,rightW,rightH);
+
+  ctx.fillStyle="#687075";
+  ctx.font="700 16px Arial";
+  ctx.fillText("3D-превью",rightX+18,rightY+28);
+
+  if(threeDImage){
+    try{
+      var img3d=await pdfLoadImage(threeDImage);
+      var s3=Math.min((rightW-26)/img3d.width,(rightH-58)/img3d.height);
+      var w3=img3d.width*s3,h3=img3d.height*s3;
+      ctx.drawImage(img3d,rightX+(rightW-w3)/2,rightY+42+(rightH-50-h3)/2,w3,h3);
+    }catch(e){}
+  }else{
+    ctx.fillStyle="#a0a6a9";
+    ctx.font="14px Arial";
+    ctx.fillText("3D-превью недоступно",rightX+18,rightY+72);
+  }
+
+  ctx.fillStyle="#f8f8f7";
+  ctx.fillRect(rightX,730,rightW,300);
+  ctx.strokeStyle="#dde1e3";
+  ctx.strokeRect(rightX,730,rightW,300);
+
+  var info=pdfBoardInfo();
+  var shapeArea=lastModel && lastModel.shapeMetrics ? lastModel.shapeMetrics.areaM2 : null;
+  var lines=[
+    ["Доска",info.name+" "+info.width+"×"+info.height+" мм"],
+    ["Направление",$("dir") && $("dir").selectedOptions[0] ? $("dir").selectedOptions[0].textContent : "—"],
+    ["Раскладка",$("layoutMode") && $("layoutMode").selectedOptions[0] ? $("layoutMode").selectedOptions[0].textContent : "—"],
+    ["Длина",$("boardStockLength") && $("boardStockLength").selectedOptions[0] ? $("boardStockLength").selectedOptions[0].textContent : "—"],
+    ["Площадь",Number.isFinite(shapeArea)?fmt(shapeArea,2)+" м²":"—"]
+  ];
+  var yy=770;
+  lines.forEach(function(row){
+    ctx.fillStyle="#8b9296";
+    ctx.font="14px Arial";
+    ctx.fillText(row[0],rightX+18,yy);
+    ctx.textAlign="right";
+    ctx.fillStyle="#202427";
+    ctx.font="700 14px Arial";
+    ctx.fillText(row[1],rightX+rightW-18,yy);
+    ctx.textAlign="left";
+    yy+=48;
+  });
+
+  ctx.fillStyle="#8d9498";
+  ctx.font="15px Arial";
+  ctx.fillText("ДПК · технологический зазор между досками 3 мм",80,1095);
+  return page.canvas;
 }
 
 async function pdfDrawingPage(title,subtitle,imageData,legend){
@@ -3609,10 +3704,11 @@ async function generateProjectPdf(){
     calculate(); await pdfWait(100);
     var deckImage=await pdfCapturePlan("boards");
     var structureImage=await pdfCapturePlan("structure");
+    var threeDImage=await pdfCapture3D();
     var rows=pdfMaterialRows(lastModel);
 
-    var p1=await pdfDrawingPage("План раскладки ДПК","Только слой террасной доски и габаритные размеры площадки.",deckImage,false);
-    var p2=await pdfDrawingPage("План подконструкции","Подконструкция без слоя ДПК: профиль, несущие пояса, сваи / опоры и размеры.",structureImage,true);
+    var p1=await pdfDeckPage(deckImage,threeDImage);
+    var p2=await pdfDrawingPage("План подконструкции","Подконструкция без слоя ДПК. Показаны габариты площадки, профиль 40×40×2, пояс 80×80×2 и сваи / опоры.",structureImage,true);
     var p3=await pdfSpecPage(rows);
 
     var jsPDF=window.jspdf.jsPDF;
