@@ -1228,3 +1228,53 @@ body.rightCollapsed .result{
   background:rgba(255,255,255,.92);
   pointer-events:none;
 }
+
+/* Concrete support symbols */
+.concreteSupportDot{
+  box-sizing:border-box;
+}
+.concreteSupportDot.support-rubber{
+  width:calc(8px * var(--cad-inv-scale));
+  height:calc(8px * var(--cad-inv-scale));
+  border-radius:1px;
+  border:calc(1px * var(--cad-inv-scale)) solid #6f7478;
+  background:rgba(86,91,94,.28);
+}
+.concreteSupportDot.support-rebar{
+  width:calc(9px * var(--cad-inv-scale));
+  height:calc(9px * var(--cad-inv-scale));
+  border:0;
+  border-radius:50%;
+  background:transparent;
+}
+.concreteSupportDot.support-rebar::before,
+.concreteSupportDot.support-rebar::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:calc(10px * var(--cad-inv-scale));
+  height:calc(1.25px * var(--cad-inv-scale));
+  background:#596166;
+  transform-origin:center;
+}
+.concreteSupportDot.support-rebar::before{transform:translate(-50%,-50%) rotate(45deg)}
+.concreteSupportDot.support-rebar::after{transform:translate(-50%,-50%) rotate(-45deg)}
+.concreteSupportDot.support-plastic{
+  width:calc(10px * var(--cad-inv-scale));
+  height:calc(10px * var(--cad-inv-scale));
+  border-radius:50%;
+  border:calc(1.2px * var(--cad-inv-scale)) solid #58636a;
+  background:#fff;
+  box-shadow:inset 0 0 0 calc(2px * var(--cad-inv-scale)) #fff;
+}
+.concreteSupportDot.support-plastic::after{
+  content:"";
+  position:absolute;
+  left:50%;top:50%;
+  width:calc(3px * var(--cad-inv-scale));
+  height:calc(3px * var(--cad-inv-scale));
+  border-radius:50%;
+  background:#58636a;
+  transform:translate(-50%,-50%);
+}
