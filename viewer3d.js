@@ -195,11 +195,23 @@ window.addEventListener('nimtech-model-change',()=>{if(renderer) rebuild();});
 
 
 window.captureNimtech3D=async function(){
+  const was3d=document.body.classList.contains("view3d");
+  document.body.classList.add("view3d");
   init();
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   resize();
   rebuild();
-  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  controls.update();
+  const model=window.getNimtech3DModel?.();
+  const inp=window.getNimtechProjectInputs?.();
+  if(model&&inp){
+    const maxDim=Math.max(inp.L/1000,inp.W/1000,1);
+    controls.target.set(0,.04,0);
+    camera.position.set(maxDim*.92,maxDim*.72,maxDim*1.12);
+    camera.lookAt(0,0,0);
+    controls.update();
+  }
   renderer.render(scene,camera);
-  return renderer.domElement.toDataURL("image/png");
+  const data=renderer.domElement.toDataURL("image/png");
+  if(!was3d) document.body.classList.remove("view3d");
+  return data;
 };
