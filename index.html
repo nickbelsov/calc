@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Nimtech — калькулятор террасы</title>
-  <link rel="stylesheet" href="style.css?v=20260913-1405">
+  <link rel="stylesheet" href="style.css?v=20260913-1420">
   <script type="importmap">
   {
     "imports": {
@@ -57,6 +57,24 @@
         <select id="dir">
           <option value="l">По длине</option>
           <option value="w">По ширине</option>
+        </select>
+
+        <label>Вариант раскладки</label>
+        <select id="layoutMode">
+          <option value="optimal">Оптимальный раскрой</option>
+          <option value="aligned">Стыки в одну линию</option>
+          <option value="half" selected>Равномерная шахматка 1/2</option>
+          <option value="seamless">Без стыков</option>
+          <option value="frame" disabled>Рамка по периметру — следующий этап</option>
+          <option value="frameDivider" disabled>Рамка + разделительная доска — следующий этап</option>
+        </select>
+        <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
+
+        <label>Длина доски для расчёта</label>
+        <select id="boardStockLength" class="boardStockLengthSelect">
+          <option value="3000">3 м</option>
+          <option value="4000" selected>4 м</option>
+          <option value="6000">6 м</option>
         </select>
 
         <div id="rectControls" class="hidden">
@@ -119,17 +137,6 @@
       <div class="stepBody">
         <h2>Материалы</h2>
 
-        <label>Вариант раскладки</label>
-        <select id="layoutMode">
-          <option value="optimal">Оптимальный раскрой</option>
-          <option value="aligned">Стыки в одну линию</option>
-          <option value="half" selected>Равномерная шахматка 1/2</option>
-          <option value="seamless">Без стыков</option>
-          <option value="frame" disabled>Рамка по периметру — следующий этап</option>
-          <option value="frameDivider" disabled>Рамка + разделительная доска — следующий этап</option>
-        </select>
-        <small id="layoutHint">Минимизация отходов с повторным использованием остатков.</small>
-
         <div class="warehouseCard">
           <div class="warehouseHead">
             <div>
@@ -144,13 +151,6 @@
           <div id="warehouseStatus" class="warehouseStatus">Тестовый режим. Остатки загружаются локально.</div>
           <div id="warehouseLengths" class="warehouseLengths"></div>
         </div>
-
-        <label>Длина доски для расчёта</label>
-        <select id="boardStockLength" class="boardStockLengthSelect">
-          <option value="3000">3 м</option>
-          <option value="4000" selected>4 м</option>
-          <option value="6000">6 м</option>
-        </select>
 
         <div class="sizeGrid compactGrid">
           <div><label>Ширина доски, мм</label><input id="boardModule" type="number" value="150" min="50"></div>
@@ -295,7 +295,7 @@
 
 <script src="config.js?v=20260913-1405"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1405"></script>
+<script src="app.js?v=20260913-1420"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
