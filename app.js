@@ -3267,7 +3267,30 @@ function setCanvasZoom(nextScale,anchorClientX=null,anchorClientY=null){
 $("zoomIn")?.addEventListener("click",()=>setCanvasZoom(viewScale*1.15));
 $("zoomOut")?.addEventListener("click",()=>setCanvasZoom(viewScale/1.15));
 $("zoomReset")?.addEventListener("click",resetCanvasView);
-$("zoomFit")?.addEventListener("click",fitCanvasView);
+$("zoomFit")?.addEventListener("click",async()=>{
+  const workspace=document.querySelector(".workspace");
+  if(!workspace) return;
+  try{
+    if(!document.fullscreenElement){
+      await workspace.requestFullscreen();
+    }else{
+      await document.exitFullscreen();
+    }
+  }catch(err){
+    console.warn("Fullscreen is unavailable",err);
+  }
+});
+document.addEventListener("fullscreenchange",()=>{
+  document.body.classList.toggle("plannerFullscreen",!!document.fullscreenElement);
+  const btn=$("zoomFit");
+  if(btn){
+    const active=!!document.fullscreenElement;
+    btn.classList.toggle("active",active);
+    btn.title=active?"Выйти из полноэкранного режима":"Полноэкранный режим";
+    btn.setAttribute("aria-label",btn.title);
+  }
+  setTimeout(fitCanvasView,120);
+});
 
 $("canvasViewport")?.addEventListener("wheel",e=>{
   e.preventDefault();
