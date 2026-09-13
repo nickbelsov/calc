@@ -2329,6 +2329,8 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHous
   const mergedBelts=mergeCollinearSegments(beltSegments);
   const pileSteps=[];
 
+  $("concreteMaterialRow")?.classList.toggle("hidden",base!=="concrete");
+
   if(base==="ground"){
     for(const seg of mergedBelts){
       const length=seg.end-seg.start;
@@ -2432,7 +2434,7 @@ function pointInPolygonMm(point){
   return inside;
 }
 
-function buildConcreteStructure(L,W,direction,shapeMode,areaM2){
+function buildConcreteStructure(L,W,direction,shapeMode,areaM2,supportKey="rubber"){
   const tieStepMax=CONFIG.rules.concreteTieStepMaxMm||1500;
   const supportCount=Math.ceil(areaM2*(CONFIG.rules.concreteSupportsPerM2||5));
   const across=direction==="l"?W:L;
@@ -2485,7 +2487,27 @@ function buildConcreteStructure(L,W,direction,shapeMode,areaM2){
     }
   }
 
+  const specs=CONFIG.concreteSupportSpecs||{};
+  let materialSpec="";
+  let materialQuantity="";
+  if(supportKey==="rebar"){
+    const d=specs.rebar?.diameterMm||10;
+    const hh=specs.rebar?.heightMm||100;
+    materialSpec="Арматурный штырь Ø"+d+"×"+hh+" мм";
+    materialQuantity=supportCount+" шт. · "+fmt(supportCount*hh/1000,1)+" м арматуры Ø"+d+" мм";
+  }else if(supportKey==="rubber"){
+    const r=specs.rubber||{widthMm:100,depthMm:100,thicknessMm:5};
+    materialSpec="Резиновая подкладка "+r.widthMm+"×"+r.depthMm+"×"+r.thicknessMm+" мм";
+    materialQuantity=supportCount+" шт.";
+  }else{
+    materialSpec="Регулируемая винтовая пластиковая опора";
+    materialQuantity=supportCount+" шт.";
+  }
+
   return {
+    supportKey,
+    materialSpec,
+    materialQuantity,
     supportCount,
     supportPoints,
     supportsPerM2:CONFIG.rules.concreteSupportsPerM2||5,
@@ -2594,9 +2616,10 @@ function renderPlan(model){
     const w=layer.clientWidth,h=layer.clientHeight;
     for(const p of model.concreteStructure.supportPoints){
       const dot=document.createElement("div");
-      dot.className="concreteSupportDot";
+      dot.className="concreteSupportDot support-"+(model.concreteStructure.supportKey||"rubber");
       dot.style.left=(p.x/modelL*w)+"px";
       dot.style.top=(p.y/modelW*h)+"px";
+      dot.title=model.concreteStructure.materialSpec||"Опора";
       layer.appendChild(dot);
     }
   }
@@ -2808,7 +2831,7 @@ function buildAlgorithmDiagnostics(model){
   if(model.base==="concrete" && model.concreteStructure){
     lines.push({
       title:"Бетонное основание",
-      text:model.concreteSupportType+": "+model.concreteStructure.supportCount+" шт. по нормативу "+
+      text:model.concreteStructure.materialSpec+": "+model.concreteStructure.materialQuantity+" по нормативу "+
         model.concreteStructure.supportsPerM2+" шт./м². Пояс 80×80×2 отсутствует. "+
         "Перемычки 40×40×2: "+fmt(model.concreteStructure.tieMeters,1)+" м.п., шаг "+
         fmt(model.concreteStructure.tieStep)+" мм."
@@ -2852,6 +2875,7 @@ function calculate(){
   const direction=$("dir").value;
   const layoutMode=$("layoutMode").value;
   const base=$("base").value;
+  const concreteSupportKey=$("concreteSupport")?.value||"rubber";
   const concreteSupportType=$("concreteSupport")?.selectedOptions?.[0]?.textContent||"Резиновые подкладки";
   const boardModule=+$("boardModule").value||CONFIG.defaultBoardModule;
   const boardHeight=+$("boardHeight").value||23;
@@ -2963,7 +2987,7 @@ function calculate(){
 
   const shapeMetrics = shapeMode==="free" ? freeMetrics : {areaM2:L*W/1e6,bboxL:L,bboxW:W};
   const concreteStructure=base==="concrete"
-    ? buildConcreteStructure(L,W,direction,shapeMode,shapeMetrics.areaM2)
+    ? buildConcreteStructure(L,W,direction,shapeMode,shapeMetrics.areaM2,concreteSupportKey)
     : null;
 
   if(concreteStructure){
@@ -3078,8 +3102,10 @@ function calculate(){
     $("pileStepOut").textContent="—";
     $("checkPileStep").textContent="—";
     $("supports").textContent=concreteStructure.supportCount+" шт. · "+concreteSupportType;
+    $("concreteMaterialRow")?.classList.remove("hidden");
+    $("concreteMaterialSpec").textContent=concreteStructure.materialSpec+" — "+concreteStructure.materialQuantity;
     $("pileInfo").textContent=
-      concreteSupportType+": норматив "+concreteStructure.supportsPerM2+" шт./м². "+
+      concreteStructure.materialSpec+": норматив "+concreteStructure.supportsPerM2+" шт./м². "+
       "Опорный пояс 80×80×2 не применяется. Лаги 40×40×2 свариваются перемычками 40×40×2 "+
       "в единую сетку с шагом не более "+fmt(concreteStructure.tieStep)+" мм.";
 
@@ -3108,8 +3134,8 @@ function calculate(){
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
-    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,
-    algorithmVersion:"4.8"
+    beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,
+    algorithmVersion:"4.9"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3188,6 +3214,16 @@ function updateControls(){
 
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
+  const concreteKey=$("concreteSupport")?.value||"rubber";
+  const meta=$("concreteSupportMeta");
+  if(meta){
+    const specs=CONFIG.concreteSupportSpecs||{};
+    meta.innerHTML=concreteKey==="rebar"
+      ? "<span>Ø"+(specs.rebar?.diameterMm||10)+" мм</span><span>Высота "+(specs.rebar?.heightMm||100)+" мм</span><span>5 шт./м²</span>"
+      : concreteKey==="rubber"
+        ? "<span>"+(specs.rubber?.widthMm||100)+"×"+(specs.rubber?.depthMm||100)+"×"+(specs.rubber?.thicknessMm||5)+" мм</span><span>5 шт./м²</span>"
+        : "<span>Винтовая регулируемая</span><span>5 шт./м²</span>";
+  }
   document.querySelector(".beltLayer")?.classList.toggle("hidden",base==="concrete");
   const supportChip=document.querySelector(".pileLayer span:last-child");
   if(supportChip) supportChip.textContent=base==="concrete"?"Опоры":"Сваи";
