@@ -13,7 +13,7 @@ const CONFIG = {
       thickStep: 400
     },
     seamOverhang: 100,
-    maxEdgeCantilever: 200
+    maxEdgeCantilever: 40
   },
 
   belt: {
@@ -77,12 +77,14 @@ const CONFIG = {
     metalPurchaseMultiple: 6000,
     preferredLayout: "half",
     boardGapAlwaysMm: 3,
-    boardCantileverOnJoistMaxMm: 100,
+    boardCantileverOnJoistMaxMm: 40,
     houseSidePileOffset: 400,
     freeEdgeSupportCantileverMax: 200,
-    concreteSupportsPerM2: 5,
-    roofSupportsPerM2: 5,
+    concreteSupportMaxSpacingMm: 500,
+    roofSupportMaxSpacingMm: 750,
     concreteTieStepMaxMm: 1500,
-    concreteUsesBelt80x80: false
+    concreteUsesBelt80x80: false,
+    concreteSupportsFollowJoists: true,
+    roofSupportsFollowJoists: true
   }
 };
