@@ -31,7 +31,7 @@
     <a href="#materials">Материалы</a>
     <a href="#spec">Ведомость</a>
   </nav>
-  <button class="headerCta" type="button" onclick="calculate()">Получить расчёт <span>→</span></button>
+  <button id="generatePdf" class="headerCta" type="button">Получить расчёт <span>→</span></button>
 </header>
 
 <main>
@@ -305,7 +305,9 @@
 
 <script src="config.js?v=20260913-1610"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1638"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="app.js?v=20260913-1735"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
