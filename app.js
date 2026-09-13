@@ -2849,7 +2849,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.2"
+    algorithmVersion:"4.3"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
