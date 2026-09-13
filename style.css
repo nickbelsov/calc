@@ -1066,3 +1066,14 @@ body.rightCollapsed .result{
   border:calc(.85px * var(--cad-inv-scale)) solid rgba(118,73,49,.72)!important;
   box-sizing:border-box!important;
 }
+
+/* All physical WPC pieces must look identical.
+   Reused offcuts affect inventory only, never drawing appearance. */
+.boardPiece.alt,
+.boardPiece.alt.board-h,
+.boardPiece.alt.board-v{
+  background:rgba(139,93,65,.20)!important;
+  border:calc(.85px * var(--cad-inv-scale)) solid rgba(118,73,49,.72)!important;
+  opacity:1!important;
+  box-shadow:none!important;
+}
