@@ -1535,12 +1535,12 @@ function addArbitrarySegment(parent,seg,L,W,cls){
   const angle=Math.atan2(dy,dx)*180/Math.PI;
 
   const el=document.createElement("div");
-  el.className=cls+" arbitrarySegment";
+  el.className=cls+" arbitrarySegment cad-angled";
   Object.assign(el.style,{
     left:x1+"px",
     top:y1+"px",
     width:Math.max(1,len)+"px",
-    height:cls.includes("beltLine")?"4px":"2px",
+    height:"0",
     transformOrigin:"0 50%",
     transform:"rotate("+angle+"deg)"
   });
@@ -1654,7 +1654,7 @@ function addBeltSegment(parent,direction,axis,across,start,length,run){
   const w=parent.clientWidth;
   const h=parent.clientHeight;
   const line=document.createElement("div");
-  line.className="beltLine";
+  line.className="beltLine "+(direction==="l"?"cad-h":"cad-v");
 
   if(direction==="l"){
     Object.assign(line.style,{
@@ -1695,14 +1695,23 @@ function addLine(parent,cls,direction,pos,axisLength,isRunAxis){
     : pos/axisLength*(direction==="l"?h:w);
 
   const line=document.createElement("div");
-  line.className=cls;
 
   if(isRunAxis){
-    if(direction==="l") Object.assign(line.style,{left:px+"px",top:"0",width:cls.includes("beltLine")?"4px":"2px",height:"100%"});
-    else Object.assign(line.style,{top:px+"px",left:"0",height:cls.includes("beltLine")?"4px":"2px",width:"100%"});
+    if(direction==="l"){
+      line.className=cls+" cad-v";
+      Object.assign(line.style,{left:px+"px",top:"0",width:"0",height:"100%"});
+    }else{
+      line.className=cls+" cad-h";
+      Object.assign(line.style,{top:px+"px",left:"0",height:"0",width:"100%"});
+    }
   }else{
-    if(direction==="l") Object.assign(line.style,{top:px+"px",left:"0",height:cls.includes("beltLine")?"4px":"2px",width:"100%"});
-    else Object.assign(line.style,{left:px+"px",top:"0",width:cls.includes("beltLine")?"4px":"2px",height:"100%"});
+    if(direction==="l"){
+      line.className=cls+" cad-h";
+      Object.assign(line.style,{top:px+"px",left:"0",height:"0",width:"100%"});
+    }else{
+      line.className=cls+" cad-v";
+      Object.assign(line.style,{left:px+"px",top:"0",width:"0",height:"100%"});
+    }
   }
 
   parent.appendChild(line);
@@ -2018,21 +2027,21 @@ function buildZonedStructure(zones,direction,seamPatterns,joistStep,base,hasHous
 function addAbsoluteSegment(parent,seg,L,W,cls){
   const w=parent.clientWidth,h=parent.clientHeight;
   const el=document.createElement("div");
-  el.className=cls;
+  el.className=cls+" "+(seg.orientation==="h"?"cad-h":"cad-v");
 
   if(seg.orientation==="h"){
     Object.assign(el.style,{
       left:(seg.start/L*w)+"px",
       width:Math.max(1,(seg.end-seg.start)/L*w)+"px",
       top:(seg.axis/W*h)+"px",
-      height:cls.includes("beltLine")?"4px":"2px"
+      height:"0"
     });
   }else{
     Object.assign(el.style,{
       top:(seg.start/W*h)+"px",
       height:Math.max(1,(seg.end-seg.start)/W*h)+"px",
       left:(seg.axis/L*w)+"px",
-      width:cls.includes("beltLine")?"4px":"2px"
+      width:"0"
     });
   }
   parent.appendChild(el);
@@ -2747,6 +2756,8 @@ function updateWorldGrid(){
 function applyCanvasTransform(){
   const scene=$("canvasScene");
   if(!scene) return;
+  const inv=1/Math.max(.001,viewScale);
+  scene.style.setProperty("--cad-inv-scale",String(inv));
   scene.style.transform="translate("+viewX+"px,"+viewY+"px) scale("+viewScale+")";
   const zr=$("zoomReset");
   if(zr) zr.textContent=Math.round(viewScale*100)+"%";
