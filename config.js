@@ -73,6 +73,9 @@ const CONFIG = {
     boardGapAlwaysMm: 3,
     boardCantileverOnJoistMaxMm: 100,
     houseSidePileOffset: 400,
-    freeEdgeSupportCantileverMax: 200
+    freeEdgeSupportCantileverMax: 200,
+    concreteSupportsPerM2: 5,
+    concreteTieStepMaxMm: 1500,
+    concreteUsesBelt80x80: false
   }
 };
