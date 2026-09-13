@@ -473,6 +473,16 @@ function fmt(n, digits = 0) {
     maximumFractionDigits: digits
   });
 }
+function fmtRub(n){
+  if(!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("ru-RU",{maximumFractionDigits:0}).format(Math.round(n))+" ₽";
+}
+
+function selectedBoardPricingKey(){
+  const selected=getSelectedBoardProduct?.();
+  return selected?.value||"custom";
+}
+
 
 function stockPurchase(meters) {
   const stockM = CONFIG.metal.stockLength / 1000;
@@ -3018,6 +3028,17 @@ function calculate(){
   $("buy4000").textContent=(boardRows.purchases[4000]||0)+" шт.";
   $("buy6000").textContent=(boardRows.purchases[6000]||0)+" шт.";
   $("boardCount").textContent=totalBoards+" шт.";
+
+  const pricing=CONFIG.pricing||{};
+  const boardPricing=pricing.board?.[selectedBoardPricingKey()]||null;
+  let boardCost=0;
+  let boardCostKnown=!!boardPricing;
+  for(const len of [3000,4000,6000]){
+    const qty=boardRows.purchases[len]||0;
+    const unit=boardPricing?.[len];
+    if(qty>0 && !Number.isFinite(unit)) boardCostKnown=false;
+    if(qty>0 && Number.isFinite(unit)) boardCost+=qty*unit;
+  }
   $("reusedOffcuts").textContent=boardRows.reusedPieces+" шт.";
   $("boardWaste").textContent=fmt(boardRows.finalWaste/1000,2)+" м";
   $("seams").textContent=totalSeams+" шт.";
@@ -3051,6 +3072,34 @@ function calculate(){
   $("belt").textContent=fmt(beltMeters,1)+" м.п.";
   $("beltPurchase").textContent=beltBuy.sticks+" хлыстов / "+fmt(beltBuy.meters)+" м";
 
+
+  const joistCost=(pricing.profile40x40x2_per_m||0)*joistBuy.meters;
+  const beltCost=base==="concrete"||base==="roof"
+    ? 0
+    : (pricing.profile80x80x2_per_m||0)*beltBuy.meters;
+  const pileCost=base==="ground"
+    ? totalPiles*(pricing.pileD76_2500_with_head||0)
+    : 0;
+  const knownSubtotal=(boardCostKnown?boardCost:0)+joistCost+beltCost+pileCost;
+
+  $("priceBoards").textContent=boardCostKnown
+    ? fmtRub(boardCost)
+    : "нет цены для «Своей доски»";
+  $("priceJoists").textContent=fmtRub(joistCost)+" · "+fmtRub(pricing.profile40x40x2_per_m||0)+"/м";
+  $("priceBelts").textContent=base==="concrete"||base==="roof"
+    ? "не применяется"
+    : fmtRub(beltCost)+" · "+fmtRub(pricing.profile80x80x2_per_m||0)+"/м";
+  $("pricePiles").textContent=base==="ground"
+    ? fmtRub(pileCost)+" · "+fmtRub(pricing.pileD76_2500_with_head||0)+"/шт"
+    : "не применяется";
+  $("priceTotal").textContent=fmtRub(knownSubtotal);
+  $("priceNote").textContent=(pricing.source||"РРЦ")+
+    (boardCostKnown
+      ? ". В итог включены только ДПК, профиль 40×40×2, профиль 80×80×2 и сваи 2500 мм с оголовком."
+      : ". Цена пользовательской доски не задана и в итог не включена.")+
+    ((base==="concrete"||base==="roof")
+      ? " Стоимость резиновых подкладок, арматурных штырей и регулируемых опор пока не включена."
+      : "");
   if(base==="ground"){
     if(zonedStructure){
       const parts=Object.entries(zonedStructure.pileCountsByLength)
@@ -3143,7 +3192,8 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
-    algorithmVersion:"5.2"
+    pricing:{boardCost:boardCostKnown?boardCost:null,joistCost,beltCost,pileCost,total:knownSubtotal},
+    algorithmVersion:"5.3"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
