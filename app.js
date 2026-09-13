@@ -136,11 +136,11 @@ function polygonClipPath(){
 function applyPolygonToTerrace(){
   const terrace=$("terrace");
   const layer=$("constructionLayer");
-  const free=$("shapeMode").value==="free";
+  const polygonMode=$("shapeMode").value!=="rect";
 
-  terrace.classList.toggle("freeShape",free);
+  terrace.classList.toggle("freeShape",polygonMode);
 
-  if(free && polygonClosed && polygonPoints.length>=3){
+  if(polygonMode && polygonClosed && polygonPoints.length>=3){
     const clip=polygonClipPath();
     layer.style.clipPath=clip;
     layer.style.webkitClipPath=clip;
@@ -170,7 +170,7 @@ function updatePolygonEditorViewBox(svg){
 
 function renderPolygonEditor(){
   const svg=$("polygonEditor");
-  if(!svg || $("shapeMode").value!=="free") return;
+  if(!svg || $("shapeMode").value==="rect") return;
   updatePolygonEditorViewBox(svg);
   if(draggingVertex<0) applyPolygonToTerrace();
   svg.innerHTML="";
@@ -2840,12 +2840,12 @@ function calculate(){
   updateViewSize(L,W);
 
   lastModel={
-    run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,seamPatterns,polygonStructure,
+    run,across,direction,boardRows,joists,beltLayout,pileLayout,base,shapeMode,selectedShapeMode,seamPatterns,polygonStructure,
     totalJoistMeters,
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.0"
+    algorithmVersion:"4.1"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
