@@ -3500,7 +3500,7 @@ async function pdfCapturePlan(kind){
     if(was3d) document.body.classList.add("view3d");
     renderPlan(lastModel);
     if(lastModel.shapeMode==="free") renderPolygonEditor();
-    applyViewTransform();
+    applyCanvasTransform();
     updateWorldGrid();
   }
 }
