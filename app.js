@@ -232,22 +232,34 @@ function renderPolygonEditor(){
     }
 
     if(polygonClosed){
-      const length=Math.hypot(next.x-p.x,next.y-p.y);
-      const labelY=my-labelOffset;
+      const dx=next.x-p.x,dy=next.y-p.y;
+      const length=Math.hypot(dx,dy);
+      const safeLength=Math.max(1,length);
+
+      // Размер всегда располагаем СНАРУЖИ контура.
+      // Берём нормаль к ребру и выбираем направление от центра площадки.
+      let nx=-dy/safeLength, ny=dx/safeLength;
+      const cx=(b.minX+b.maxX)/2, cy=(b.minY+b.maxY)/2;
+      if((cx-mx)*nx+(cy-my)*ny>0){
+        nx=-nx; ny=-ny;
+      }
+
+      const labelX=mx+nx*labelOffset;
+      const labelY=my+ny*labelOffset;
       const labelText=fmt(length)+" мм";
       const bg=document.createElementNS(ns,"rect");
-      const approxW=Math.max(labelSize*2.3,labelText.length*labelSize*.58);
-      const approxH=labelSize*1.45;
-      bg.setAttribute("x",String(mx-approxW/2));
-      bg.setAttribute("y",String(labelY-approxH*.78));
+      const approxW=Math.max(labelSize*2.15,labelText.length*labelSize*.56);
+      const approxH=labelSize*1.32;
+      bg.setAttribute("x",String(labelX-approxW/2));
+      bg.setAttribute("y",String(labelY-approxH*.74));
       bg.setAttribute("width",String(approxW));
       bg.setAttribute("height",String(approxH));
-      bg.setAttribute("rx",String(labelSize*.22));
+      bg.setAttribute("rx",String(labelSize*.18));
       bg.setAttribute("class","edgeLabelBg");
       svg.appendChild(bg);
 
       const label=document.createElementNS(ns,"text");
-      label.setAttribute("x",mx); label.setAttribute("y",labelY);
+      label.setAttribute("x",labelX); label.setAttribute("y",labelY);
       label.setAttribute("text-anchor","middle");
       label.setAttribute("font-size",String(labelSize));
       label.setAttribute("class","edgeLabel");
