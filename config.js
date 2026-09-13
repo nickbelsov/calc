@@ -81,6 +81,7 @@ const CONFIG = {
     houseSidePileOffset: 400,
     freeEdgeSupportCantileverMax: 200,
     concreteSupportsPerM2: 5,
+    roofSupportsPerM2: 5,
     concreteTieStepMaxMm: 1500,
     concreteUsesBelt80x80: false
   }
