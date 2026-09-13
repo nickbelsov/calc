@@ -787,3 +787,64 @@ body.rightCollapsed .result{
 .regularJoistKey,.joistLayer .layerSwatch{background:#627f91!important}
 .beltKey,.beltLayer .layerSwatch{background:#c87558!important}
 .pileKey,.pileLayer .layerSwatch{background:#899196!important}
+
+/* Constructor drawing palette — exact working-scheme convention */
+:root{
+  --board:#9b6b50;
+  --joist:#4f7187;
+  --belt:#d04d43;
+  --pile:#d58b96;
+}
+
+/* DPK layout: thin brown lines */
+.boardPiece{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:inset 0 -1px 0 #9b6b50!important;
+  opacity:.78!important;
+}
+
+/* 40×40×2: thin blue lines */
+.joistLine,
+.joistLine.double{
+  background:#4f7187!important;
+  opacity:.9!important;
+  box-shadow:none!important;
+}
+.joistLine{
+  width:2px;
+}
+
+/* 80×80×2: thin red lines */
+.beltLine{
+  background:#d04d43!important;
+  opacity:.95!important;
+  box-shadow:none!important;
+}
+.perimeterSupportSvg,
+.angledSupportBelt{
+  stroke:#d04d43!important;
+  stroke-width:2!important;
+  opacity:.95!important;
+}
+
+/* Piles: hollow pink circles */
+.pileDot{
+  width:10px!important;
+  height:10px!important;
+  background:#fff!important;
+  border:2px solid #d58b96!important;
+  border-radius:50%!important;
+  box-shadow:none!important;
+  transform:translate(-50%,-50%)!important;
+}
+
+/* Legend mirrors drawing */
+.boardKey,.boardLayer .layerSwatch{background:#9b6b50!important}
+.regularJoistKey,.joistLayer .layerSwatch{background:#4f7187!important}
+.beltKey,.beltLayer .layerSwatch{background:#d04d43!important}
+.pileKey,.pileLayer .layerSwatch{
+  background:#fff!important;
+  border:2px solid #d58b96!important;
+  border-radius:50%!important;
+}
