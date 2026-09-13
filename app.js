@@ -1905,26 +1905,7 @@ function renderBoardRows(parent,model){
 
     parent.appendChild(el);
 
-    // Явно показываем стык ДПК короткой коричневой риской.
-    // Это не конструктивный профиль, а только графическое обозначение шва.
-    if(!isFirstInSegment){
-      const joint=document.createElement("div");
-      joint.className="boardJoint "+(direction==="l"?"joint-v":"joint-h");
-      if(direction==="l"){
-        Object.assign(joint.style,{
-          left:(a*w)+"px",
-          top:(rowStart*h)+"px",
-          height:Math.max(2,rowSize*h)+"px"
-        });
-      }else{
-        Object.assign(joint.style,{
-          top:(a*h)+"px",
-          left:(rowStart*w)+"px",
-          width:Math.max(2,rowSize*w)+"px"
-        });
-      }
-      parent.appendChild(joint);
-    }
+
   };
 
   if(boardRows.polygon){
@@ -2803,7 +2784,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.4"
+    algorithmVersion:"3.5"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
