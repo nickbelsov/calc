@@ -41,11 +41,16 @@
     <div class="setupSection">
       <div class="stepNo">01</div>
       <div class="stepBody">
-        <h2>Объект</h2>
-        <label>Форма площадки</label>
+        <h2>Форма площадки</h2>
+        <label>Тип площадки</label>
         <select id="shapeMode">
+          <option value="free">Произвольная форма</option>
           <option value="rect">Прямоугольник</option>
-          <option value="free">Произвольный контур</option>
+          <option value="lshape">L-образная</option>
+          <option value="tshape">T-образная</option>
+          <option value="ushape">U-образная</option>
+          <option value="oshape">O-образная</option>
+          <option value="circle">Круглая</option>
         </select>
       </div>
     </div>
@@ -291,7 +296,7 @@
 
 <script src="config.js?v=20260913-1105"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1130"></script>
+<script src="app.js?v=20260913-1140"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
