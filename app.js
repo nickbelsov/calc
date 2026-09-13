@@ -3277,9 +3277,9 @@ function applySelectedBoardProduct(){
   const meta=$("selectedBoardMeta");
   if(meta){
     if(selected.value==="double"){
-      meta.innerHTML="<span>Nimtek Double</span><span>139 × 27 мм</span>";
+      meta.innerHTML="<span>NimTech Double</span><span>139 × 27 мм</span>";
     }else if(selected.value==="elite"){
-      meta.innerHTML="<span>Nimtek Elite</span><span>140 × 25 мм</span>";
+      meta.innerHTML="<span>NimTech Elite</span><span>140 × 25 мм</span>";
     }else{
       meta.innerHTML="<span>Своя доска</span><span>"+($("boardModule")?.value||"—")+" × "+($("boardHeight")?.value||"—")+" мм</span>";
     }
