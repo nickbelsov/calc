@@ -1210,3 +1210,21 @@ body.rightCollapsed .result{
 .workspace:fullscreen .canvasFooter{z-index:70}
 #zoomFit.active{background:#111;color:#fff}
 #zoomFit.active svg{stroke:#fff}
+
+/* Concrete base: 40×40 welded grid and distributed supports */
+.joistLine.concreteTie.cad-h::after,
+.joistLine.concreteTie.cad-v::after{
+  background:#4f7187!important;
+  opacity:.82;
+}
+.concreteSupportDot{
+  position:absolute;
+  z-index:6;
+  width:calc(6px * var(--cad-inv-scale));
+  height:calc(6px * var(--cad-inv-scale));
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  border:calc(1.1px * var(--cad-inv-scale)) solid #8a9297;
+  background:rgba(255,255,255,.92);
+  pointer-events:none;
+}
