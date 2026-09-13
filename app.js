@@ -1248,20 +1248,45 @@ function regularJoistPositions(run,maxStep){
 
 function buildJoists(run,allSeams,maxStep){
   const seamOffset=CONFIG.joist.seamOverhang;
+
+  // Ось стыка — отдельная обязательная сущность.
+  // Для равномерной шахматки 1/2 это должны быть три глобальные оси:
+  // 1/4, 1/2 и 3/4 опорного пролёта.
+  const seamAxes=uniquePositions(
+    (allSeams||[]).filter(x=>x>1&&x<run-1)
+  );
+
+  const seamPairs=[];
   const seamJoists=[];
 
-  for(const seam of allSeams){
-    if(seam-seamOffset>0) seamJoists.push(seam-seamOffset);
-    if(seam+seamOffset<run) seamJoists.push(seam+seamOffset);
+  for(const axis of seamAxes){
+    const left=axis-seamOffset;
+    const right=axis+seamOffset;
+    const pair=[];
+
+    if(left>0){
+      seamJoists.push(left);
+      pair.push(left);
+    }
+    if(right<run){
+      seamJoists.push(right);
+      pair.push(right);
+    }
+
+    seamPairs.push({
+      axis,
+      positions:pair
+    });
   }
 
+  // Эти трубы обязательны и никогда не удаляются/не заменяются
+  // обычной сеткой лаг.
   const seam=uniquePositions(seamJoists);
   const edge=Math.min(CONFIG.joist.maxEdgeCantilever,run/2);
 
-  // Обязательные опоры: две трубы у каждого стыка.
-  // Между ними и краями достраиваем обычные трубы так,
-  // чтобы ни один фактический шаг не превышал maxStep.
-  const anchors=uniquePositions([edge,...seam,run-edge].filter(x=>x>=0&&x<=run));
+  const anchors=uniquePositions(
+    [edge,...seam,run-edge].filter(x=>x>=0&&x<=run)
+  );
   const regular=[];
 
   for(let i=0;i<anchors.length-1;i++){
@@ -1271,14 +1296,14 @@ function buildJoists(run,allSeams,maxStep){
     const step=span/intervals;
 
     for(let j=1;j<intervals;j++){
-      regular.push(a+step*j);
+      const p=a+step*j;
+      // Не ставим обычную лагу почти поверх обязательной двойной.
+      if(!seam.some(s=>Math.abs(s-p)<5)) regular.push(p);
     }
   }
 
-  // Крайние опоры тоже являются обычным профилем, если не совпали
-  // со стыковыми трубами.
   [edge,run-edge].forEach(p=>{
-    if(!seam.some(s=>Math.abs(s-p)<2)) regular.push(p);
+    if(!seam.some(s=>Math.abs(s-p)<5)) regular.push(p);
   });
 
   const regularUnique=uniquePositions(regular);
@@ -1292,6 +1317,8 @@ function buildJoists(run,allSeams,maxStep){
   return {
     regular:regularUnique,
     seam,
+    seamAxes,
+    seamPairs,
     all,
     actualMaxStep,
     edgeOverhangStart:all.length?all[0]:run/2,
@@ -2379,13 +2406,27 @@ function buildAlgorithmDiagnostics(model){
     });
   }
 
+  if($("layoutMode").value==="half"){
+    const axes=(joists.seamAxes||[]);
+    lines.push({
+      title:"Двойные лаги на стыках",
+      text:axes.length
+        ? "Обязательные оси: "+axes.map(x=>fmt(x)+" мм").join(" / ")+
+          ". На каждой оси ставятся две трубы 40×40×2: по одной под каждый конец ДПК."
+        : "Оси стыков не найдены — проверь геометрию раскладки."
+    });
+  }
+
   lines.push({
     title:"40×40×2",
     text:"Шаг по осям не более "+joistStepByBoardHeight(+$("boardHeight").value||23)+
       " мм. Обычных линий: "+(model.zonedStructure
         ? model.zonedStructure.zones.reduce((sum,z)=>sum+z.joists.regular.length,0)
         : joists.regular.length)+
-      ", линий под стыками: "+(model.zonedStructure
+      ", осей стыков: "+(model.zonedStructure
+        ? model.zonedStructure.zones.reduce((sum,z)=>sum+(z.joists.seamAxes?.length||0),0)
+        : (joists.seamAxes?.length||0))+
+      ", физических лаг под стыками: "+(model.zonedStructure
         ? model.zonedStructure.zones.reduce((sum,z)=>sum+z.joists.seam.length,0)
         : joists.seam.length)+
       ". Фактический максимальный шаг: "+fmt(joists.actualMaxStep)+" мм."+
@@ -2709,7 +2750,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.1"
+    algorithmVersion:"3.2"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
