@@ -2419,6 +2419,11 @@ function buildAlgorithmDiagnostics(model){
   }
 
   lines.push({
+    title:"Свес ДПК на лаге",
+    text:"Не более 100 мм от оси опорной трубы 40×40×2 до торца доски. На стыке каждый торец опирается на свою лагу."
+  });
+
+  lines.push({
     title:"Технологический зазор ДПК",
     text:"3 мм всегда: между соседними досками по ширине и между торцами досок в местах продольных стыков. Зазор участвует в геометрии раскладки и количестве материала."
   });
@@ -2784,7 +2789,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.5"
+    algorithmVersion:"3.6"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
