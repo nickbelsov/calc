@@ -1463,8 +1463,10 @@ function polygonFreePerimeterSegments(hasHouse=false,houseSide="top"){
   const tol=Math.max(2,Math.max(b.maxX-b.minX,b.maxY-b.minY)*0.002);
   const segments=[];
 
-  const isHouseEdge=(p,q)=>{
+  const isHouseEdge=(p,q,edgeIndex)=>{
     if(!hasHouse) return false;
+    const explicitIndex=resolveHouseEdgeIndex(houseSide);
+    if(explicitIndex>=0) return edgeIndex===explicitIndex;
 
     if(houseSide==="top"){
       return Math.abs(p.y-b.minY)<=tol && Math.abs(q.y-b.minY)<=tol;
@@ -1485,7 +1487,7 @@ function polygonFreePerimeterSegments(hasHouse=false,houseSide="top"){
     const p=polygonPoints[i],q=polygonPoints[(i+1)%polygonPoints.length];
     const len=polygonEdgeLength(p,q);
     if(len<1) continue;
-    if(isHouseEdge(p,q)) continue;
+    if(isHouseEdge(p,q,i)) continue;
 
     segments.push({
       x1:p.x-b.minX,
@@ -1912,6 +1914,7 @@ function addBeltSegment(parent,direction,axis,across,start,length,run){
 }
 
 function houseAffectsAxis(direction,houseSide,axis){
+  if(resolveHouseEdgeIndex(houseSide)>=0) return false;
   if(axis==="across"){
     return direction==="l"?["top","bottom"].includes(houseSide):["left","right"].includes(houseSide);
   }
@@ -1919,6 +1922,7 @@ function houseAffectsAxis(direction,houseSide,axis){
 }
 
 function houseAtAxisStart(direction,houseSide,axis){
+  if(resolveHouseEdgeIndex(houseSide)>=0) return false;
   if(axis==="across") return direction==="l"?houseSide==="top":houseSide==="left";
   return direction==="l"?houseSide==="left":houseSide==="top";
 }
@@ -2871,7 +2875,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"4.4"
+    algorithmVersion:"4.5"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -2923,6 +2927,27 @@ function applyStandardShapePreset(mode){
   polygonViewBoxLock=null;
 }
 
+function updateHouseSideOptions(){
+  const select=$("houseSide");
+  if(!select) return;
+  const old=select.value;
+  const mode=$("shapeMode")?.value||"free";
+  const options=[];
+  if(mode==="rect"){
+    options.push({value:"top",label:"A–B"},{value:"right",label:"B–C"},{value:"bottom",label:"C–D"},{value:"left",label:"D–A"});
+  }else if(polygonClosed && polygonPoints.length>=3){
+    for(let i=0;i<polygonPoints.length;i++) options.push({value:"edge:"+i,label:polygonVertexName(i)+"–"+polygonVertexName((i+1)%polygonPoints.length)});
+  }
+  select.innerHTML=options.map(o=>'<option value="'+o.value+'">'+o.label+'</option>').join("");
+  if(options.some(o=>o.value===old)) select.value=old;
+  else if(options.length) select.value=options[0].value;
+}
+function resolveHouseEdgeIndex(houseSide){
+  if(typeof houseSide==="string"&&houseSide.startsWith("edge:")){
+    const n=Number(houseSide.slice(5)); return Number.isInteger(n)?n:-1;
+  }
+  return -1;
+}
 function updateControls(){
   const base=$("base").value;
   const layoutMode=$("layoutMode").value;
@@ -2930,6 +2955,7 @@ function updateControls(){
   $("ground").classList.toggle("hidden",base!=="ground");
   $("concrete").classList.toggle("hidden",base!=="concrete");
   $("houseControls").classList.toggle("hidden",!$("hasHouse").checked);
+  updateHouseSideOptions();
   const mode=$("shapeMode").value;
   const free=mode!=="rect";
   $("rectControls").classList.toggle("hidden",mode==="free");
@@ -2991,8 +3017,8 @@ function loadControlScheme(){
   $("shapeMode").value="free";
   $("dir").value="w";
   $("hasHouse").checked=true;
-  $("houseSide").value="top";
   updateControls();
+  $("houseSide").value="edge:0";
   calculate();
   setTimeout(fitCanvasView,60);
 }
