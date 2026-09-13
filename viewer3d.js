@@ -9,7 +9,7 @@ let renderer,scene,camera,controls,modelGroup,ro;
 
 function init(){
   if(renderer||!host) return;
-  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
   renderer.shadowMap.enabled=true;
   host.appendChild(renderer.domElement);
@@ -192,3 +192,14 @@ btn2?.addEventListener('click',()=>{
   btn2.classList.add('active');btn3.classList.remove('active');
 });
 window.addEventListener('nimtech-model-change',()=>{if(renderer) rebuild();});
+
+
+window.captureNimtech3D=async function(){
+  init();
+  resize();
+  rebuild();
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  controls.update();
+  renderer.render(scene,camera);
+  return renderer.domElement.toDataURL("image/png");
+};
