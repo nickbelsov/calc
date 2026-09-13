@@ -3143,7 +3143,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
-    algorithmVersion:"5.1"
+    algorithmVersion:"5.2"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3252,11 +3252,53 @@ function updateControls(){
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-["L","W","dir","layoutMode","base","concreteSupport","boardModule","boardHeight","hasHouse","houseSide","boardStockLength","useWarehouse","warehouseProduct"].forEach(id=>{
+function getSelectedBoardProduct(){
+  return document.querySelector('input[name="boardProduct"]:checked');
+}
+
+function applySelectedBoardProduct(){
+  const selected=getSelectedBoardProduct();
+  if(!selected) return;
+
+  document.querySelectorAll(".productChoice").forEach(card=>{
+    card.classList.toggle("active",card.contains(selected));
+  });
+
+  const custom=selected.value==="custom";
+  $("customBoardFields")?.classList.toggle("hidden",!custom);
+
+  if(!custom){
+    const width=Number(selected.dataset.width);
+    const height=Number(selected.dataset.height);
+    if(Number.isFinite(width)) $("boardModule").value=String(width);
+    if(Number.isFinite(height)) $("boardHeight").value=String(height);
+  }
+
+  const meta=$("selectedBoardMeta");
+  if(meta){
+    if(selected.value==="double"){
+      meta.innerHTML="<span>Nimtek Double</span><span>139 × 27 мм</span>";
+    }else if(selected.value==="elite"){
+      meta.innerHTML="<span>Nimtek Elite</span><span>140 × 25 мм</span>";
+    }else{
+      meta.innerHTML="<span>Своя доска</span><span>"+($("boardModule")?.value||"—")+" × "+($("boardHeight")?.value||"—")+" мм</span>";
+    }
+  }
+}
+
+document.querySelectorAll('input[name="boardProduct"]').forEach(input=>{
+  input.addEventListener("change",()=>{
+    applySelectedBoardProduct();
+    updateControls();
+    calculate();
+  });
+});
+
+["L","W","dir","layoutMode","base","concreteSupport","boardModule","boardHeight","hasHouse","houseSide","boardStockLength"].forEach(id=>{
   const el=$(id);
   if(el){
-    el.addEventListener("input",()=>{updateControls();calculate();});
-    el.addEventListener("change",()=>{updateControls();calculate();});
+    el.addEventListener("input",()=>{if(id==="boardModule"||id==="boardHeight") applySelectedBoardProduct(); updateControls();calculate();});
+    el.addEventListener("change",()=>{if(id==="boardModule"||id==="boardHeight") applySelectedBoardProduct(); updateControls();calculate();});
   }
 });
 
@@ -3311,6 +3353,7 @@ $("resetPolygon")?.addEventListener("click",resetPolygon);
 $("calc").addEventListener("click",calculate);
 
 installPolygonPointerHandlers();
+applySelectedBoardProduct();
 updateControls();
 calculate();
 function updatePanelToggleTitles(){
