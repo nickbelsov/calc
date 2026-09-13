@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Nimtech — калькулятор террасы</title>
-  <link rel="stylesheet" href="style.css?v=20260913-1430">
+  <link rel="stylesheet" href="style.css?v=20260913-1450">
   <script type="importmap">
   {
     "imports": {
@@ -135,24 +135,44 @@
       <div class="stepBody">
         <h2>Материалы</h2>
 
-        <div class="warehouseCard">
-          <div class="warehouseHead">
-            <div>
-              <span class="warehouseEyebrow">СКЛАД NIMTECH</span>
-              <strong>Учитывать реальные остатки</strong>
-            </div>
-            <label class="switch"><input id="useWarehouse" type="checkbox"><span></span></label>
-          </div>
+        <label>Террасная доска</label>
+        <div class="productChoiceGrid" id="boardProductChoices">
+          <label class="productChoice active">
+            <input type="radio" name="boardProduct" value="double" data-width="139" data-height="27" checked>
+            <span class="productChoiceImage placeholder" id="doubleProductImage">Фото<br>добавим</span>
+            <span class="productChoiceText">
+              <strong>Nimtek Double</strong>
+              <small>139 × 27 мм</small>
+            </span>
+          </label>
 
-          <label>Позиция для расчёта</label>
-          <select id="warehouseProduct"></select>
-          <div id="warehouseStatus" class="warehouseStatus">Тестовый режим. Остатки загружаются локально.</div>
-          <div id="warehouseLengths" class="warehouseLengths"></div>
+          <label class="productChoice">
+            <input type="radio" name="boardProduct" value="elite" data-width="140" data-height="25">
+            <span class="productChoiceImage placeholder" id="eliteProductImage">Фото<br>добавим</span>
+            <span class="productChoiceText">
+              <strong>Nimtek Elite</strong>
+              <small>140 × 25 мм</small>
+            </span>
+          </label>
+
+          <label class="productChoice">
+            <input type="radio" name="boardProduct" value="custom">
+            <span class="productChoiceImage customIcon">+</span>
+            <span class="productChoiceText">
+              <strong>Своя доска</strong>
+              <small>Задать размеры</small>
+            </span>
+          </label>
         </div>
 
-        <div class="sizeGrid compactGrid">
+        <div id="customBoardFields" class="sizeGrid compactGrid hidden">
           <div><label>Ширина доски, мм</label><input id="boardModule" type="number" value="150" min="50"></div>
-          <div><label>Высота, мм</label><input id="boardHeight" type="number" value="23" min="1"></div>
+          <div><label>Высота доски, мм</label><input id="boardHeight" type="number" value="23" min="1"></div>
+        </div>
+
+        <div id="selectedBoardMeta" class="constructionFacts">
+          <span>Nimtek Double</span>
+          <span>139 × 27 мм</span>
         </div>
 
         <button id="calc">Рассчитать</button>
@@ -293,7 +313,7 @@
 
 <script src="config.js?v=20260913-1405"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1430"></script>
+<script src="app.js?v=20260913-1450"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
