@@ -12,7 +12,7 @@ const CONFIG = {
       thickMinHeight: 24,
       thickStep: 400
     },
-    seamOverhang: 125,
+    seamOverhang: 100,
     maxEdgeCantilever: 200
   },
 
@@ -33,8 +33,8 @@ const CONFIG = {
   },
 
   overhang: {
-    min: 100,
-    max: 150
+    min: 0,
+    max: 100
   },
 
   engineering: {
@@ -71,6 +71,7 @@ const CONFIG = {
     metalPurchaseMultiple: 6000,
     preferredLayout: "half",
     boardGapAlwaysMm: 3,
+    boardCantileverOnJoistMaxMm: 100,
     houseSidePileOffset: 400,
     freeEdgeSupportCantileverMax: 200
   }
