@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Nimtech — калькулятор террасы</title>
-  <link rel="stylesheet" href="style.css?v=20260913-1055">
+  <link rel="stylesheet" href="style.css?v=20260913-1125">
   <script type="importmap">
   {
     "imports": {
@@ -142,12 +142,12 @@
           <div id="warehouseLengths" class="warehouseLengths"></div>
         </div>
 
-        <label>Разрешённые длины доски</label>
-        <div class="lengthOptions">
-          <label><input id="allow3000" type="checkbox" checked> 3 м</label>
-          <label><input id="allow4000" type="checkbox" checked> 4 м</label>
-          <label><input id="allow6000" type="checkbox" checked> 6 м</label>
-        </div>
+        <label>Длина доски для расчёта</label>
+        <select id="boardStockLength" class="boardStockLengthSelect">
+          <option value="3000">3 м</option>
+          <option value="4000" selected>4 м</option>
+          <option value="6000">6 м</option>
+        </select>
 
         <div class="sizeGrid compactGrid">
           <div><label>Ширина доски, мм</label><input id="boardModule" type="number" value="150" min="50"></div>
@@ -291,7 +291,7 @@
 
 <script src="config.js?v=20260913-1105"></script>
 <script src="inventory-adapter.js"></script>
-<script src="app.js?v=20260913-1115"></script>
+<script src="app.js?v=20260913-1125"></script>
 <script type="module" src="viewer3d.js"></script>
 </body>
 </html>
