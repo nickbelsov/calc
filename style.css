@@ -1059,3 +1059,10 @@ body.rightCollapsed .result{
   border-color:#b8bec1;
   box-shadow:0 0 0 3px rgba(24,28,30,.04);
 }
+
+/* WPC piece joints: calculation keeps 3 mm, visual uses outlined adjoining pieces */
+.boardPiece{
+  background:rgba(139,93,65,.20)!important;
+  border:calc(.85px * var(--cad-inv-scale)) solid rgba(118,73,49,.72)!important;
+  box-sizing:border-box!important;
+}
