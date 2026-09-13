@@ -945,3 +945,19 @@ body.rightCollapsed .result{
 .edgeLabel{
   font-weight:600!important;
 }
+
+/* Dimension labels may extend outside the terrace geometry */
+#terrace.freeShape{
+  overflow:visible!important;
+}
+#terrace.freeShape .constructionLayer{
+  overflow:hidden!important;
+}
+#terrace.freeShape .polygonEditor{
+  overflow:visible!important;
+  pointer-events:auto;
+}
+.edgeLabelBg,
+.edgeLabel{
+  pointer-events:auto;
+}
