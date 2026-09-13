@@ -3193,7 +3193,7 @@ function calculate(){
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,concreteStructure,concreteSupportType,concreteSupportKey,roofStructure,
     pricing:{boardCost:boardCostKnown?boardCost:null,joistCost,beltCost,pileCost,total:knownSubtotal},
-    algorithmVersion:"5.3"
+    algorithmVersion:"5.4"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
@@ -3406,6 +3406,234 @@ installPolygonPointerHandlers();
 applySelectedBoardProduct();
 updateControls();
 calculate();
+
+function pdfWait(ms){ return new Promise(function(resolve){ setTimeout(resolve,ms); }); }
+
+function pdfBoardInfo(){
+  var selected=getSelectedBoardProduct ? getSelectedBoardProduct() : null;
+  var width=Number($("boardModule") && $("boardModule").value || CONFIG.defaultBoardModule);
+  var height=Number($("boardHeight") && $("boardHeight").value || 0);
+  if(selected && selected.value==="double") return {key:"double",name:"NimTech Double",width:139,height:27};
+  if(selected && selected.value==="elite") return {key:"elite",name:"NimTech Elite",width:140,height:25};
+  return {key:"custom",name:"Своя доска",width:width,height:height};
+}
+
+function pdfMaterialRows(model){
+  var rows=[], pricing=CONFIG.pricing||{}, info=pdfBoardInfo();
+  var bp=pricing.board && pricing.board[info.key] || null;
+  var purchases=model && model.boardRows && model.boardRows.purchases || {};
+  [3000,4000,6000].forEach(function(len){
+    var qty=Number(purchases[len]||0);
+    if(!qty) return;
+    var price=bp ? Number(bp[len]) : NaN;
+    rows.push({
+      name:"ДПК "+info.name+" "+info.width+"×"+info.height+" мм, "+(len/1000)+" м",
+      unit:"шт.", qty:qty,
+      price:Number.isFinite(price)?price:null,
+      total:Number.isFinite(price)?qty*price:null
+    });
+  });
+
+  var jb=stockPurchase(Number(model && model.totalJoistMeters || 0));
+  if(jb.sticks){
+    var jp=Number(pricing.profile40x40x2_per_m||0)*6;
+    rows.push({name:"Труба профильная 40×40×2, хлыст 6 м",unit:"шт.",qty:jb.sticks,price:jp,total:jb.sticks*jp});
+  }
+
+  if(model && model.base==="ground" && Number(model.beltMeters||0)>0){
+    var bb=stockPurchase(Number(model.beltMeters||0));
+    var bprice=Number(pricing.profile80x80x2_per_m||0)*6;
+    rows.push({name:"Труба профильная 80×80×2, хлыст 6 м",unit:"шт.",qty:bb.sticks,price:bprice,total:bb.sticks*bprice});
+  }
+
+  if(model && model.base==="ground"){
+    if(model.zonedStructure && model.zonedStructure.pileCountsByLength){
+      Object.keys(model.zonedStructure.pileCountsByLength).sort(function(a,b){return Number(b)-Number(a);}).forEach(function(lenKey){
+        var len=Number(lenKey), qty=Number(model.zonedStructure.pileCountsByLength[lenKey]||0);
+        if(!qty) return;
+        var pp=len===2500 ? Number(pricing.pileD76_2500_with_head||0) : NaN;
+        rows.push({name:"Свая винтовая D76, "+len+" мм"+(len===2500?" + оголовок":""),unit:"шт.",qty:qty,price:Number.isFinite(pp)?pp:null,total:Number.isFinite(pp)?qty*pp:null});
+      });
+    }else{
+      var pq=Number(model.totalPiles||0);
+      if(pq){
+        var pprice=Number(pricing.pileD76_2500_with_head||0);
+        rows.push({name:"Свая винтовая D76, 2500 мм + оголовок",unit:"шт.",qty:pq,price:pprice,total:pq*pprice});
+      }
+    }
+  }
+
+  if(model && model.base==="concrete" && model.concreteStructure && model.concreteStructure.supportCount){
+    rows.push({name:model.concreteStructure.materialSpec||"Опоры бетонного основания",unit:"шт.",qty:Number(model.concreteStructure.supportCount),price:null,total:null});
+  }
+  if(model && model.base==="roof" && model.roofStructure && model.roofStructure.actualSupportCount){
+    rows.push({name:model.roofStructure.materialSpec||"Регулируемая винтовая пластиковая опора",unit:"шт.",qty:Number(model.roofStructure.actualSupportCount),price:null,total:null});
+  }
+  return rows;
+}
+
+async function pdfCapturePlan(kind){
+  var viewport=$("canvasViewport");
+  if(!viewport || !lastModel) throw new Error("Чертёж не рассчитан.");
+  var ids=["showBoards","showJoists","showBelts","showPiles"];
+  var saved={};
+  ids.forEach(function(id){ saved[id]=$(id).checked; });
+  var oldScale=viewScale, oldX=viewX, oldY=viewY, was3d=document.body.classList.contains("view3d");
+
+  try{
+    document.body.classList.remove("view3d");
+    if(kind==="boards"){
+      $("showBoards").checked=true; $("showJoists").checked=false; $("showBelts").checked=false; $("showPiles").checked=false;
+    }else{
+      $("showBoards").checked=false; $("showJoists").checked=true; $("showBelts").checked=true; $("showPiles").checked=true;
+    }
+    renderPlan(lastModel);
+    if(lastModel.shapeMode==="free") renderPolygonEditor();
+    await pdfWait(30);
+    fitCanvasView();
+    await pdfWait(150);
+    var canvas=await html2canvas(viewport,{backgroundColor:"#ffffff",scale:2,useCORS:true,logging:false});
+    return canvas.toDataURL("image/png");
+  }finally{
+    ids.forEach(function(id){ $(id).checked=saved[id]; });
+    viewScale=oldScale; viewX=oldX; viewY=oldY;
+    if(was3d) document.body.classList.add("view3d");
+    renderPlan(lastModel);
+    if(lastModel.shapeMode==="free") renderPolygonEditor();
+    applyViewTransform();
+    updateWorldGrid();
+  }
+}
+
+function pdfLoadImage(src){
+  return new Promise(function(resolve,reject){
+    var img=new Image();
+    img.onload=function(){resolve(img);};
+    img.onerror=reject;
+    img.src=src;
+  });
+}
+
+async function pdfPageBase(title,subtitle){
+  var canvas=document.createElement("canvas");
+  canvas.width=1684; canvas.height=1190;
+  var ctx=canvas.getContext("2d");
+  ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  try{
+    var logo=await pdfLoadImage("assets/nimtech-mark.svg");
+    ctx.drawImage(logo,72,52,58,68);
+  }catch(e){}
+  ctx.fillStyle="#111416"; ctx.font="700 38px Arial"; ctx.fillText("NIMTECH",150,86);
+  ctx.fillStyle="#92999d"; ctx.font="12px Arial"; ctx.fillText("ТЕХНОЛОГИИ ДЛЯ КОМФОРТНОЙ СРЕДЫ",150,110);
+  ctx.textAlign="right"; ctx.font="16px Arial"; ctx.fillText("РАСЧЁТ ТЕРРАСЫ",1612,76);
+  ctx.font="14px Arial"; ctx.fillText(new Date().toLocaleDateString("ru-RU"),1612,102);
+  ctx.textAlign="left";
+  ctx.strokeStyle="#e2e5e7"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(72,142); ctx.lineTo(1612,142); ctx.stroke();
+  ctx.fillStyle="#111416"; ctx.font="700 36px Arial"; ctx.fillText(title,72,202);
+  ctx.fillStyle="#7b8387"; ctx.font="17px Arial"; ctx.fillText(subtitle,72,232);
+  return {canvas:canvas,ctx:ctx};
+}
+
+async function pdfDrawingPage(title,subtitle,imageData,legend){
+  var page=await pdfPageBase(title,subtitle), ctx=page.ctx;
+  var img=await pdfLoadImage(imageData);
+  var x=72,y=270,w=1540,h=780;
+  ctx.strokeStyle="#dde1e3"; ctx.strokeRect(x,y,w,h);
+  var scale=Math.min((w-30)/img.width,(h-30)/img.height);
+  var dw=img.width*scale, dh=img.height*scale;
+  ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+
+  if(legend){
+    var ly=1090;
+    ctx.font="15px Arial"; ctx.fillStyle="#687075";
+    ctx.strokeStyle="#4f7187"; ctx.lineWidth=4; ctx.beginPath();ctx.moveTo(80,ly);ctx.lineTo(120,ly);ctx.stroke();ctx.fillText("40×40×2",132,ly+5);
+    ctx.strokeStyle="#d94d45";ctx.beginPath();ctx.moveTo(270,ly);ctx.lineTo(310,ly);ctx.stroke();ctx.fillText("80×80×2",322,ly+5);
+    ctx.strokeStyle="#df8796";ctx.lineWidth=3;ctx.beginPath();ctx.arc(475,ly,8,0,Math.PI*2);ctx.stroke();ctx.fillText("Сваи / опоры",494,ly+5);
+    ctx.textAlign="right";ctx.fillStyle="#9ba1a4";ctx.fillText("Все размеры в мм",1600,ly+5);ctx.textAlign="left";
+  }else{
+    ctx.fillStyle="#8d9498"; ctx.font="15px Arial"; ctx.fillText("ДПК · технологический зазор между досками 3 мм",80,1095);
+  }
+  return page.canvas;
+}
+
+function pdfMoney(v){ return Number.isFinite(v) ? new Intl.NumberFormat("ru-RU").format(Math.round(v))+" ₽" : "—"; }
+
+async function pdfSpecPage(rows){
+  var page=await pdfPageBase("Спецификация материалов","Количество и стоимость материалов по текущему расчёту проекта.");
+  var ctx=page.ctx, x=72, y=280;
+  var widths=[60,760,100,140,190,210], headers=["№","Наименование","Ед.","Количество","Цена за ед.","Итого"];
+  var total=0, missing=false;
+  rows.forEach(function(r){ if(Number.isFinite(r.total)) total+=r.total; else missing=true; });
+
+  ctx.fillStyle="#f2f4f5"; ctx.fillRect(x,y,1540,48);
+  ctx.font="700 15px Arial"; ctx.fillStyle="#626b70";
+  var cx=x;
+  headers.forEach(function(h,i){ ctx.fillText(h,cx+10,y+30); cx+=widths[i]; });
+  y+=48;
+
+  ctx.font="15px Arial";
+  rows.forEach(function(r,i){
+    var rh=58; ctx.strokeStyle="#e2e5e7"; ctx.strokeRect(x,y,1540,rh);
+    var vals=[String(i+1),r.name,r.unit,String(r.qty),pdfMoney(r.price),pdfMoney(r.total)];
+    var px=x;
+    vals.forEach(function(v,j){
+      ctx.fillStyle=j===5?"#111416":"#353a3d";
+      ctx.font=(j===5?"700 ":"")+"15px Arial";
+      var text=v;
+      if(j===1 && ctx.measureText(text).width>widths[j]-20){
+        while(text.length>5 && ctx.measureText(text+"…").width>widths[j]-20) text=text.slice(0,-1);
+        text+="…";
+      }
+      ctx.fillText(text,px+10,y+35);
+      px+=widths[j];
+    });
+    y+=rh;
+  });
+
+  var ty=Math.max(y+45,930);
+  ctx.strokeStyle="#111416";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(1100,ty);ctx.lineTo(1612,ty);ctx.stroke();
+  ctx.fillStyle="#687075";ctx.font="20px Arial";ctx.fillText("ИТОГО",1100,ty+48);
+  ctx.textAlign="right";ctx.fillStyle="#111416";ctx.font="700 38px Arial";ctx.fillText(pdfMoney(total),1612,ty+48);ctx.textAlign="left";
+  ctx.fillStyle="#969da1";ctx.font="13px Arial";ctx.fillText("Цены: "+(CONFIG.pricing&&CONFIG.pricing.source||"РРЦ")+(missing?". Позиции без цены не включены в итог.":""),1100,ty+78);
+  return page.canvas;
+}
+
+async function generateProjectPdf(){
+  if(!lastModel) calculate();
+  if(!lastModel) throw new Error("Сначала задайте параметры проекта.");
+  if(typeof html2canvas!=="function" || !window.jspdf || !window.jspdf.jsPDF) throw new Error("Модули PDF ещё загружаются. Повторите через несколько секунд.");
+
+  var btn=$("generatePdf"), old=btn ? btn.innerHTML : "";
+  if(btn){ btn.disabled=true; btn.innerHTML="Формируем PDF…"; }
+  try{
+    calculate(); await pdfWait(100);
+    var deckImage=await pdfCapturePlan("boards");
+    var structureImage=await pdfCapturePlan("structure");
+    var rows=pdfMaterialRows(lastModel);
+
+    var p1=await pdfDrawingPage("План раскладки ДПК","Только слой террасной доски и габаритные размеры площадки.",deckImage,false);
+    var p2=await pdfDrawingPage("План подконструкции","Подконструкция без слоя ДПК: профиль, несущие пояса, сваи / опоры и размеры.",structureImage,true);
+    var p3=await pdfSpecPage(rows);
+
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF({orientation:"landscape",unit:"mm",format:"a4",compress:true});
+    [p1,p2,p3].forEach(function(c,i){
+      if(i) pdf.addPage("a4","landscape");
+      pdf.addImage(c.toDataURL("image/jpeg",0.94),"JPEG",0,0,297,210,undefined,"FAST");
+    });
+    pdf.save("NIMTECH_terrace_calculation_"+new Date().toISOString().slice(0,10)+".pdf");
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=old||"Получить расчёт";}
+  }
+}
+
+$("generatePdf")?.addEventListener("click",function(){
+  generateProjectPdf().catch(function(err){
+    console.error(err);
+    alert("Не удалось сформировать PDF: "+(err && err.message ? err.message : err));
+  });
+});
+
 function updatePanelToggleTitles(){
   const leftCollapsed=document.body.classList.contains("leftCollapsed");
   const rightCollapsed=document.body.classList.contains("rightCollapsed");
