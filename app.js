@@ -1863,30 +1863,60 @@ function renderBoardRows(parent,model){
   const {direction,run,across,boardRows}=model;
   const w=parent.clientWidth,h=parent.clientHeight;
 
+  const addPiece=(piece,rowStart,rowSize,cursor,isFirstInSegment)=>{
+    const el=document.createElement("div");
+    el.className="boardPiece "+(direction==="l"?"board-h":"board-v")+(piece.reused?" alt":"");
+    const a=cursor/run,b=(cursor+piece.length)/run;
+
+    if(direction==="l"){
+      Object.assign(el.style,{
+        left:(a*w)+"px",
+        width:Math.max(1,(b-a)*w)+"px",
+        top:(rowStart*h)+"px",
+        height:Math.max(2,rowSize*h)+"px"
+      });
+    }else{
+      Object.assign(el.style,{
+        top:(a*h)+"px",
+        height:Math.max(1,(b-a)*h)+"px",
+        left:(rowStart*w)+"px",
+        width:Math.max(2,rowSize*w)+"px"
+      });
+    }
+
+    parent.appendChild(el);
+
+    // Явно показываем стык ДПК короткой коричневой риской.
+    // Это не конструктивный профиль, а только графическое обозначение шва.
+    if(!isFirstInSegment){
+      const joint=document.createElement("div");
+      joint.className="boardJoint "+(direction==="l"?"joint-v":"joint-h");
+      if(direction==="l"){
+        Object.assign(joint.style,{
+          left:(a*w)+"px",
+          top:(rowStart*h)+"px",
+          height:Math.max(2,rowSize*h)+"px"
+        });
+      }else{
+        Object.assign(joint.style,{
+          top:(a*h)+"px",
+          left:(rowStart*w)+"px",
+          width:Math.max(2,rowSize*w)+"px"
+        });
+      }
+      parent.appendChild(joint);
+    }
+  };
+
   if(boardRows.polygon){
     boardRows.rows.forEach(row=>{
       const rowStart=Math.max(0,(row.axis-CONFIG.defaultBoardModule/2)/across);
-      const rowHeight=Math.min(1,CONFIG.defaultBoardModule/across);
+      const rowSize=Math.min(1,CONFIG.defaultBoardModule/across);
 
       row.segments.forEach(seg=>{
         let cursor=seg.start;
-        seg.pieces.forEach(piece=>{
-          const el=document.createElement("div");
-          el.className="boardPiece"+(piece.reused?" alt":"");
-          const a=cursor/run,b=(cursor+piece.length)/run;
-
-          if(direction==="l"){
-            Object.assign(el.style,{
-              left:(a*w)+"px",width:Math.max(1,(b-a)*w)+"px",
-              top:(rowStart*h)+"px",height:Math.max(2,rowHeight*h)+"px"
-            });
-          }else{
-            Object.assign(el.style,{
-              top:(a*h)+"px",height:Math.max(1,(b-a)*h)+"px",
-              left:(rowStart*w)+"px",width:Math.max(2,rowHeight*w)+"px"
-            });
-          }
-          parent.appendChild(el);
+        seg.pieces.forEach((piece,index)=>{
+          addPiece(piece,rowStart,rowSize,cursor,index===0);
           cursor+=piece.length;
         });
       });
@@ -1894,20 +1924,13 @@ function renderBoardRows(parent,model){
     return;
   }
 
-  const rowCount=boardRows.rows.length;
+  const rowCount=Math.max(1,boardRows.rows.length);
   boardRows.rows.forEach((row,rowIndex)=>{
-    const rowStart=rowIndex/rowCount,rowEnd=(rowIndex+1)/rowCount;
+    const rowStart=rowIndex/rowCount;
+    const rowSize=1/rowCount;
     let cursor=0;
-    row.pieces.forEach(piece=>{
-      const el=document.createElement("div");
-      el.className="boardPiece"+(piece.reused?" alt":"");
-      const a=cursor/run,b=(cursor+piece.length)/run;
-      if(direction==="l"){
-        Object.assign(el.style,{left:(a*w)+"px",width:Math.max(1,(b-a)*w)+"px",top:(rowStart*h)+"px",height:Math.max(1,(rowEnd-rowStart)*h)+"px"});
-      }else{
-        Object.assign(el.style,{top:(a*h)+"px",height:Math.max(1,(b-a)*h)+"px",left:(rowStart*w)+"px",width:Math.max(1,(rowEnd-rowStart)*w)+"px"});
-      }
-      parent.appendChild(el);
+    row.pieces.forEach((piece,index)=>{
+      addPiece(piece,rowStart,rowSize,cursor,index===0);
       cursor+=piece.length;
     });
   });
@@ -2251,7 +2274,7 @@ function renderPlan(model){
       }
     }else{
       for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
-      for(const pos of joists.seam) addLine(layer,"joistLine",direction,pos,run,true);
+      for(const pos of joists.seam) addLine(layer,"joistLine double",direction,pos,run,true);
     }
   }
 
@@ -2750,7 +2773,7 @@ function calculate(){
     regularJoistMeters:effectiveRegularJoistMeters,
     seamJoistMeters:effectiveSeamJoistMeters,
     beltMeters,totalPiles,zonedStructure,supportDistanceCheck,structuralLimits,
-    algorithmVersion:"3.2"
+    algorithmVersion:"3.3"
   };
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
