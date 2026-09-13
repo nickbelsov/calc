@@ -1012,3 +1012,14 @@ body.rightCollapsed .result{
   width:calc(1.7px * var(--cad-inv-scale));
   background:#4f7187;
 }
+
+/* DPK physical board surface — brown fill, 20% opacity */
+.boardPiece{
+  background:rgba(139,93,65,.20)!important;
+  opacity:1!important;
+}
+.boardPiece::after{
+  background:#956447!important;
+  opacity:.72;
+}
+/* 3 mm gaps are represented geometrically by spacing between boardPiece elements. */
