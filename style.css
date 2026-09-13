@@ -961,3 +961,54 @@ body.rightCollapsed .result{
 .edgeLabel{
   pointer-events:auto;
 }
+
+/* Board rendering must follow board direction */
+.boardPiece{
+  box-shadow:none!important;
+  background:transparent!important;
+  overflow:visible!important;
+  opacity:.62!important;
+}
+.boardPiece::after{
+  content:"";
+  position:absolute;
+  pointer-events:none;
+  background:#9b6b50;
+}
+.boardPiece.board-h::after{
+  left:0;right:0;top:50%;
+  height:calc(var(--cad-board-stroke) * var(--cad-inv-scale));
+  transform:translateY(-50%);
+}
+.boardPiece.board-v::after{
+  top:0;bottom:0;left:50%;
+  width:calc(var(--cad-board-stroke) * var(--cad-inv-scale));
+  transform:translateX(-50%);
+}
+
+/* Visible DPK seam ticks, not structural members */
+.boardJoint{
+  position:absolute;
+  z-index:2;
+  pointer-events:none;
+  background:#9b6b50;
+  opacity:.8;
+}
+.boardJoint.joint-v{
+  width:calc(1.25px * var(--cad-inv-scale));
+  transform:translateX(-50%);
+}
+.boardJoint.joint-h{
+  height:calc(1.25px * var(--cad-inv-scale));
+  transform:translateY(-50%);
+}
+
+/* Mandatory joists under DPK joints: same blue, slightly more legible */
+.joistLine.double.cad-h::after{
+  height:calc(1.7px * var(--cad-inv-scale));
+  background:#4f7187;
+}
+.joistLine.double.cad-v::after{
+  width:calc(1.7px * var(--cad-inv-scale));
+  background:#4f7187;
+}
