@@ -3400,7 +3400,7 @@ function loadControlScheme(){
 $("drawPolygon")?.addEventListener("click",startDrawingPolygon);
 $("loadControlScheme")?.addEventListener("click",loadControlScheme);
 $("resetPolygon")?.addEventListener("click",resetPolygon);
-$("calc").addEventListener("click",calculate);
+$("calc")?.addEventListener("click",calculate);
 
 installPolygonPointerHandlers();
 applySelectedBoardProduct();
