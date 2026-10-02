@@ -1354,3 +1354,17 @@ body.rightCollapsed .result{
   color:#8d9498;
   font-size:12px;
 }
+
+/* Profile outlines use their physical 40/80 mm widths, including workspace zoom. */
+.joistLine.cad-h::after,.beltLine.cad-h::after,.cad-angled::after{
+ height:var(--profile-plan-width)!important;
+}
+.joistLine.cad-v::after,.beltLine.cad-v::after{
+ width:var(--profile-plan-width)!important;
+}
+.joistLine.double.cad-h::after{
+ background:linear-gradient(to bottom,#4f7187 0, #4f7187 calc(50% - var(--profile-center-line)/2),#fff calc(50% - var(--profile-center-line)/2),#fff calc(50% + var(--profile-center-line)/2),#4f7187 calc(50% + var(--profile-center-line)/2))!important;
+}
+.joistLine.double.cad-v::after{
+ background:linear-gradient(to right,#4f7187 0, #4f7187 calc(50% - var(--profile-center-line)/2),#fff calc(50% - var(--profile-center-line)/2),#fff calc(50% + var(--profile-center-line)/2),#4f7187 calc(50% + var(--profile-center-line)/2))!important;
+}
