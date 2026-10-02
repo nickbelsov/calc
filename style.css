@@ -1368,3 +1368,15 @@ body.rightCollapsed .result{
 .joistLine.double.cad-v::after{
  background:linear-gradient(to right,#4f7187 0, #4f7187 calc(50% - var(--profile-center-line)/2),#fff calc(50% - var(--profile-center-line)/2),#fff calc(50% + var(--profile-center-line)/2),#4f7187 calc(50% + var(--profile-center-line)/2))!important;
 }
+
+/* KRONEX roof support footprint, scaled with the terrace rather than screen pixels. */
+.concreteSupportDot.support-plastic.roofSupportDot{
+ width:var(--roof-base-width)!important;
+ height:var(--roof-base-height)!important;
+ padding:0!important;border:0!important;background:transparent!important;
+ box-shadow:none!important;border-radius:0!important;
+ transform:translate(-50%,-50%)!important;
+ z-index:2!important;opacity:1!important;
+}
+.roofSupportDot::before,.concreteSupportDot.support-plastic.roofSupportDot::after{content:none!important;display:none!important;}
+.roofSupportDot svg{display:block;overflow:visible;}
