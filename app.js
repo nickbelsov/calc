@@ -1393,7 +1393,7 @@ function buildJoists(run,allSeams,maxStep){
 
     for(let j=1;j<intervals;j++){
       const p=a+step*j;
-      // Не ставим обычную лагу почти поверх обязательной двойной.
+      // Не ставим обычную лагу почти поверх обязательным профилем под стыком.
       if(!seam.some(s=>Math.abs(s-p)<5)) regular.push(p);
     }
   }
@@ -2534,7 +2534,7 @@ function renderPlan(model){
   if($("showJoists").checked){
     if(zonedStructure){
       for(const seg of zonedStructure.joistSegments){
-        addAbsoluteSegment(layer,seg,modelL,modelW,"joistLine"+(seg.type==="seam"?" double":""));
+        addAbsoluteSegment(layer,seg,modelL,modelW,"joistLine");
       }
     }else if(model.shapeMode==="free" && polygonClosed){
       const addPolygonJoist=function(pos,cls){
@@ -2547,10 +2547,10 @@ function renderPlan(model){
         }
       };
       for(const pos of joists.regular) addPolygonJoist(pos,"joistLine");
-      for(const pos of joists.seam) addPolygonJoist(pos,"joistLine double");
+      for(const pos of joists.seam) addPolygonJoist(pos,"joistLine");
     }else{
       for(const pos of joists.regular) addLine(layer,"joistLine",direction,pos,run,true);
-      for(const pos of joists.seam) addLine(layer,"joistLine double",direction,pos,run,true);
+      for(const pos of joists.seam) addLine(layer,"joistLine",direction,pos,run,true);
     }
 
     if(base==="concrete" && model.concreteStructure){
@@ -2634,7 +2634,7 @@ function renderPlan(model){
   // Physical profile widths in plan units; the workspace transform handles zoom.
   for(const el of layer.querySelectorAll(".joistLine,.beltLine")){
     const profileMm=el.classList.contains("beltLine")?80:40;
-    const pair=el.classList.contains("double")?2:1;
+    const pair=1;
     const horizontal=el.classList.contains("cad-h");
     let pxPerMm=horizontal?layer.clientHeight/modelW:layer.clientWidth/modelL;
     if(el.classList.contains("cad-angled")){
