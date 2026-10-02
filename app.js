@@ -368,16 +368,8 @@ function getSelectedWarehouseProduct(){
 }
 
 function getAllowedBoardLengths(){
-  const selected=Number($("boardStockLength")?.value||4000);
-  const useWarehouse=$("useWarehouse")?.checked;
-  const product=getSelectedWarehouseProduct();
-
-  if(useWarehouse && product){
-    const stock=product.variants?.[selected]?.stock||0;
-    return stock>0 ? [selected] : [];
-  }
-
-  return [selected];
+  const length=Number($("boardStockLength").value);
+  return catalogModel()?.items.some(i=>i.length===length) ? [length] : [];
 }
 
 
@@ -3042,7 +3034,7 @@ function calculate(){
   $("boardCount").textContent=totalBoards+" шт.";
 
   const pricing=CONFIG.pricing||{};
-  const boardPricing=pricing.board?.[selectedBoardPricingKey()]||null;
+  const boardPricing=catalogPrices();
   let boardCost=0;
   let boardCostKnown=!!boardPricing;
   for(const len of [3000,4000,6000]){
@@ -3096,7 +3088,7 @@ function calculate(){
 
   $("priceBoards").textContent=boardCostKnown
     ? fmtRub(boardCost)
-    : "нет цены для «Своей доски»";
+    : "РРЦ отсутствует";
   $("priceJoists").textContent=fmtRub(joistCost)+" · "+fmtRub(pricing.profile40x40x2_per_m||0)+"/м";
   $("priceBelts").textContent=base==="concrete"||base==="roof"
     ? "не применяется"
@@ -3105,10 +3097,10 @@ function calculate(){
     ? fmtRub(pileCost)+" · "+fmtRub(pricing.pileD76_2500_with_head||0)+"/шт"
     : "не применяется";
   $("priceTotal").textContent=fmtRub(knownSubtotal);
-  $("priceNote").textContent=(pricing.source||"РРЦ")+
+  $("priceNote").textContent=(window.NIMTECH_BOARD_CATALOG.source+"; металлокаркас — цены от 13.09.2026")+
     (boardCostKnown
       ? ". В итог включены только ДПК, профиль 40×40×2, профиль 80×80×2 и сваи 2500 мм с оголовком."
-      : ". Цена пользовательской доски не задана и в итог не включена.")+
+      : ". РРЦ выбранной модификации отсутствует; итог неполный.")+
     ((base==="concrete"||base==="roof")
       ? " Стоимость резиновых подкладок, арматурных штырей и регулируемых опор пока не включена."
       : "");
@@ -3207,6 +3199,7 @@ function calculate(){
     pricing:{boardCost:boardCostKnown?boardCost:null,joistCost,beltCost,pileCost,total:knownSubtotal},
     algorithmVersion:"5.6"
   };
+  updateCatalogCost();
   renderAlgorithmDiagnostics(lastModel);
   setTimeout(()=>{
     renderPlan(lastModel);
@@ -3314,47 +3307,43 @@ function updateControls(){
     : "Выберите хотя бы одну длину доски для расчёта.";
 }
 
-function getSelectedBoardProduct(){
-  return document.querySelector('input[name="boardProduct"]:checked');
-}
-
+function catalogModel(){return window.NIMTECH_BOARD_CATALOG.models.find(m=>m.id===$("boardModel").value);}
+function getSelectedBoardProduct(){const m=catalogModel();return m?{value:m.id,dataset:{width:m.width,height:m.height}}:null;}
+function catalogItem(length=Number($("boardStockLength").value)){return catalogModel()?.items.find(i=>i.color===$("boardColor").value && i.length===length);}
+function catalogPrices(){return Object.fromEntries([...new Set(catalogModel()?.items.map(i=>i.length)||[])].map(l=>[l,catalogItem(l)?.price]));}
+function fillCatalogSelect(id,entries,previous){const el=$(id);el.replaceChildren(...entries.map(([value,text])=>new Option(text,String(value))));if(entries.some(e=>String(e[0])===previous))el.value=previous;}
 function applySelectedBoardProduct(){
-  const selected=getSelectedBoardProduct();
-  if(!selected) return;
-
-  document.querySelectorAll(".productChoice").forEach(card=>{
-    card.classList.toggle("active",card.contains(selected));
-  });
-
-  const custom=selected.value==="custom";
-  $("customBoardFields")?.classList.toggle("hidden",!custom);
-
-  if(!custom){
-    const width=Number(selected.dataset.width);
-    const height=Number(selected.dataset.height);
-    if(Number.isFinite(width)) $("boardModule").value=String(width);
-    if(Number.isFinite(height)) $("boardHeight").value=String(height);
-  }
-
-  const meta=$("selectedBoardMeta");
-  if(meta){
-    if(selected.value==="double"){
-      meta.innerHTML="<span>NimTech Double</span><span>139 × 27 мм</span>";
-    }else if(selected.value==="elite"){
-      meta.innerHTML="<span>NimTech Elite</span><span>140 × 25 мм</span>";
-    }else{
-      meta.innerHTML="<span>Своя доска</span><span>"+($("boardModule")?.value||"—")+" × "+($("boardHeight")?.value||"—")+" мм</span>";
-    }
-  }
+ const m=catalogModel();if(!m)return;
+ $("boardModule").value=m.width;$("boardHeight").value=m.height;
+ const price=catalogItem()?.price;
+ $("selectedBoardMeta").textContent=m.width+" × "+m.height+" мм · "+(Number.isFinite(price)?fmtRub(price)+"/шт":"РРЦ отсутствует");
 }
-
-document.querySelectorAll('input[name="boardProduct"]').forEach(input=>{
-  input.addEventListener("change",()=>{
-    applySelectedBoardProduct();
-    updateControls();
-    calculate();
-  });
-});
+function updateCatalog(level){
+ const models=window.NIMTECH_BOARD_CATALOG.models;
+ const oldModel=$("boardModel").value,oldColor=$("boardColor").value,oldLength=$("boardStockLength").value;
+ if(level==="collection")fillCatalogSelect("boardModel",models.filter(m=>m.collection===$("boardCollection").value).map(m=>[m.id,m.name]),oldModel);
+ const m=catalogModel();
+ fillCatalogSelect("boardColor",[...new Set(m.items.map(i=>i.color))].sort((a,b)=>a.localeCompare(b,"ru")).map(c=>[c,c]),oldColor);
+ fillCatalogSelect("boardStockLength",[...new Set(m.items.map(i=>i.length))].sort((a,b)=>a-b).map(l=>[l,l/1000+" м"]),oldLength);
+ applySelectedBoardProduct();
+}
+function updateCatalogCost(){
+ applySelectedBoardProduct();if(!lastModel)return;
+ const prices=catalogPrices(), purchases=lastModel.boardRows.purchases;
+ let cost=0,known=true;
+ const positions=[];
+ for(const [length,qty] of Object.entries(purchases)){if(!qty)continue;const item=catalogItem(Number(length));if(!Number.isFinite(item?.price))known=false;else cost+=qty*item.price;if(item)positions.push({...item,quantity:qty});}
+ const pricing=lastModel.pricing;pricing.boardCost=known?cost:null;pricing.total=(known?cost:0)+pricing.joistCost+pricing.beltCost+pricing.pileCost;
+ lastModel.boardSelection={modelId:catalogModel().id,color:$("boardColor").value,positions};
+ $("priceBoards").textContent=known?fmtRub(cost):"РРЦ отсутствует";
+ $("priceTotal").textContent=known?fmtRub(pricing.total):"неполный расчёт · "+fmtRub(pricing.total);
+}
+const lengthControl=$("boardStockLength");const lengthLabel=lengthControl.previousElementSibling;
+$("catalogLengthSlot").append(lengthLabel,lengthControl);
+fillCatalogSelect("boardCollection",[["Alpha","Альфа"],["Beta","Бета"],["Gamma","Гамма"],["Mars","Марс"]],"Alpha");
+updateCatalog("collection");
+for(const id of ["boardCollection","boardModel"]){$(id).addEventListener("change",()=>{updateCatalog(id==="boardCollection"?"collection":"model");updateControls();calculate();});}
+$("boardColor").addEventListener("change",updateCatalogCost);
 
 ["L","W","dir","layoutMode","base","concreteSupport","boardModule","boardHeight","hasHouse","houseSide","boardStockLength"].forEach(id=>{
   const el=$(id);
@@ -3421,18 +3410,11 @@ calculate();
 
 function pdfWait(ms){ return new Promise(function(resolve){ setTimeout(resolve,ms); }); }
 
-function pdfBoardInfo(){
-  var selected=getSelectedBoardProduct ? getSelectedBoardProduct() : null;
-  var width=Number($("boardModule") && $("boardModule").value || CONFIG.defaultBoardModule);
-  var height=Number($("boardHeight") && $("boardHeight").value || 0);
-  if(selected && selected.value==="double") return {key:"double",name:"NimTech Double",width:139,height:27};
-  if(selected && selected.value==="elite") return {key:"elite",name:"NimTech Elite",width:140,height:25};
-  return {key:"custom",name:"Своя доска",width:width,height:height};
-}
+function pdfBoardInfo(){const m=catalogModel();return {key:m.id,name:m.name+" · "+$("boardColor").value,width:m.width,height:m.height};}
 
 function pdfMaterialRows(model){
   var rows=[], pricing=CONFIG.pricing||{}, info=pdfBoardInfo();
-  var bp=pricing.board && pricing.board[info.key] || null;
+  var bp=catalogPrices();
   var purchases=model && model.boardRows && model.boardRows.purchases || {};
   [3000,4000,6000].forEach(function(len){
     var qty=Number(purchases[len]||0);
@@ -3980,3 +3962,4 @@ window.getNimtechProjectInputs=()=>{
   };
 };
 $("canvasViewport")?.addEventListener("contextmenu",e=>e.preventDefault());
+
