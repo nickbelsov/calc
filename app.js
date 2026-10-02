@@ -2627,6 +2627,19 @@ function renderPlan(model){
     }
   }
 
+  // Physical profile widths in plan units; the workspace transform handles zoom.
+  for(const el of layer.querySelectorAll(".joistLine,.beltLine")){
+    const profileMm=el.classList.contains("beltLine")?80:40;
+    const pair=el.classList.contains("double")?2:1;
+    const horizontal=el.classList.contains("cad-h");
+    let pxPerMm=horizontal?layer.clientHeight/modelW:layer.clientWidth/modelL;
+    if(el.classList.contains("cad-angled")){
+      const angle=Number(el.style.transform.match(/rotate\\(([-\\d.]+)deg\\)/)?.[1]||0)*Math.PI/180;
+      pxPerMm=1/Math.hypot(Math.sin(angle)/(layer.clientWidth/modelL),Math.cos(angle)/(layer.clientHeight/modelW));
+    }
+    el.style.setProperty("--profile-plan-width",(profileMm*pair*pxPerMm)+"px");
+    el.style.setProperty("--profile-center-line",(pxPerMm)+"px");
+  }
   if(zonedStructure) renderZoneOutlines(layer,zonedStructure,modelL,modelW);
   renderEngineeringDimensions(layer,model);
 }
