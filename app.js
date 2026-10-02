@@ -2620,9 +2620,13 @@ function renderPlan(model){
     for(const p of model.roofStructure.supportPoints){
       const dot=document.createElement("div");
       dot.className="concreteSupportDot support-plastic roofSupportDot";
+      // KRONEX top view: dimensions supplied by the project owner.
+      dot.style.setProperty("--roof-base-width",(195/modelL*w)+"px");
+      dot.style.setProperty("--roof-base-height",(195/modelW*h)+"px");
+      dot.innerHTML='<svg viewBox="-97.5 -97.5 195 195" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true"><circle cx="0" cy="0" r="96.5" fill="#e1e3e5" stroke="#51565b" stroke-width="2"/><circle cx="0" cy="0" r="73.5" fill="#bfc3c7" stroke="#51565b" stroke-width="2"/><path d="M-97.5 0H-73.5 M73.5 0H97.5 M0 -97.5V-73.5 M0 73.5V97.5" fill="none" stroke="#777d83" stroke-width="2"/></svg>';
       dot.style.left=(p.x/modelL*w)+"px";
       dot.style.top=(p.y/modelW*h)+"px";
-      dot.title="Регулируемая винтовая пластиковая опора под лагой 40×40×2";
+      dot.title="Опора KRONEX · основание Ø195 мм · верхняя часть Ø147 мм";
       layer.appendChild(dot);
     }
   }
